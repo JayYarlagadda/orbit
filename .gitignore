@@ -1,0 +1,25 @@
+# Build outputs
+/build/
+/bin/
+/coverage/
+*.out
+*.prof
+*.exe
+
+# Local environment and toolchains
+/.env
+/.env.*
+!/.env.example
+/.tools/
+/.cache/
+
+# IDE and OS files
+/.idea/
+/.vscode/
+.DS_Store
+Thumbs.db
+
+# Runtime state and generated results
+/data/
+/docs/results/local/
+*.log

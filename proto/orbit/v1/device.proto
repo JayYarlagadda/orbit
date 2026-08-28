@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package orbit.v1;
+
+option go_package = "github.com/JayYarlagadda/orbit/gen/orbit/v1;orbitv1";
+
+import "google/protobuf/timestamp.proto";
+
+service DeviceService {
+  rpc Connect(stream DeviceFrame) returns (stream ServerFrame);
+}
+
+message DeviceFrame {
+  oneof body {
+    DeviceHello hello = 1;
+    CommandAck ack = 2;
+  }
+}
+
+message ServerFrame {
+  oneof body {
+    SessionOpened session_opened = 1;
+    CommandDelivery command = 2;
+  }
+}
+
+message DeviceHello {
+  string device_id = 1;
+  string client_instance_id = 2;
+  int64 last_observed_session_epoch = 3;
+  int64 last_seen_sequence = 4;
+}
+
+message SessionOpened {
+  string device_id = 1;
+  int64 session_epoch = 2;
+}
+
+message CommandDelivery {
+  string command_id = 1;
+  string device_id = 2;
+  int64 sequence_number = 3;
+  int32 priority = 4;
+  bytes payload = 5;
+  bytes payload_hash = 6;
+  google.protobuf.Timestamp expires_at = 7;
+  int64 lease_token = 8;
+  int64 session_epoch = 9;
+}
+
+message CommandAck {
+  string command_id = 1;
+  string device_id = 2;
+  int64 sequence_number = 3;
+  int64 lease_token = 4;
+  int64 session_epoch = 5;
+  bytes result_hash = 6;
+  google.protobuf.Timestamp client_applied_at = 7;
+}

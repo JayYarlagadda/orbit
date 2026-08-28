@@ -1,0 +1,40 @@
+{
+  "$schema": "../schema/v1/scenario.schema.json",
+  "schema_version": "1",
+  "name": "offline-reconnect",
+  "seed": "6840227782638526189",
+  "duration_ms": 30000,
+  "topology": {
+    "gateways": ["gateway-a", "gateway-b"],
+    "devices": ["device-a"]
+  },
+  "network_profile": {
+    "latency_ms": 25,
+    "jitter_ms": 5,
+    "delivery_loss_rate": 0,
+    "ack_loss_rate": 0,
+    "duplicate_rate": 0
+  },
+  "events": [
+    {
+      "at_ms": 5000,
+      "type": "device_disconnect",
+      "device_id": "device-a"
+    },
+    {
+      "at_ms": 15000,
+      "type": "gateway_crash",
+      "gateway_id": "gateway-a"
+    },
+    {
+      "at_ms": 20000,
+      "type": "device_reconnect",
+      "device_id": "device-a"
+    },
+    {
+      "at_ms": 25000,
+      "type": "gateway_recover",
+      "gateway_id": "gateway-a"
+    }
+  ]
+}

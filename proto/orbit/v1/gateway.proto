@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+package orbit.v1;
+
+option go_package = "github.com/JayYarlagadda/orbit/gen/orbit/v1;orbitv1";
+
+import "orbit/v1/device.proto";
+
+service GatewayControlService {
+  rpc Connect(stream GatewayFrame) returns (stream ControlFrame);
+}
+
+message GatewayFrame {
+  oneof body {
+    GatewayHello hello = 1;
+    DeviceOnline device_online = 2;
+    DeviceOffline device_offline = 3;
+    DeliveryStarted delivery_started = 4;
+    GatewayCommandAck command_ack = 5;
+  }
+}
+
+message ControlFrame {
+  oneof body {
+    DeviceSession device_session = 1;
+    GatewayCommandAssignment command_assignment = 2;
+  }
+}
+
+message GatewayHello {
+  string gateway_id = 1;
+  string gateway_instance_id = 2;
+}
+
+message DeviceOnline {
+  string connection_id = 1;
+  string device_id = 2;
+  string client_instance_id = 3;
+}
+
+message DeviceOffline {
+  string connection_id = 1;
+  string device_id = 2;
+  int64 session_epoch = 3;
+}
+
+message DeviceSession {
+  string connection_id = 1;
+  string device_id = 2;
+  int64 session_epoch = 3;
+}
+
+message GatewayCommandAssignment {
+  string connection_id = 1;
+  CommandDelivery command = 2;
+}
+
+message DeliveryStarted {
+  string command_id = 1;
+  string device_id = 2;
+  int64 lease_token = 3;
+  int64 session_epoch = 4;
+}
+
+message GatewayCommandAck {
+  CommandAck ack = 1;
+}

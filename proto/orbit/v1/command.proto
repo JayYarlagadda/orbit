@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+package orbit.v1;
+
+option go_package = "github.com/JayYarlagadda/orbit/gen/orbit/v1;orbitv1";
+
+import "google/protobuf/timestamp.proto";
+
+service CommandService {
+  rpc SubmitCommand(SubmitCommandRequest) returns (Command);
+  rpc GetCommand(GetCommandRequest) returns (Command);
+  rpc CancelCommand(CancelCommandRequest) returns (Command);
+}
+
+message SubmitCommandRequest {
+  string producer_id = 1;
+  string idempotency_key = 2;
+  string device_id = 3;
+  int32 priority = 4;
+  bytes payload = 5;
+  google.protobuf.Timestamp expires_at = 6;
+}
+
+message GetCommandRequest {
+  string command_id = 1;
+}
+
+message CancelCommandRequest {
+  string command_id = 1;
+}
+
+message Command {
+  string command_id = 1;
+  string producer_id = 2;
+  string idempotency_key = 3;
+  string device_id = 4;
+  int64 sequence_number = 5;
+  int32 priority = 6;
+  bytes payload = 7;
+  bytes payload_hash = 8;
+  CommandState state = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp expires_at = 11;
+  google.protobuf.Timestamp next_attempt_at = 12;
+  int32 attempt_count = 13;
+  int64 lease_token = 14;
+  google.protobuf.Timestamp acknowledged_at = 15;
+  string failure_reason = 16;
+}
+
+enum CommandState {
+  COMMAND_STATE_UNSPECIFIED = 0;
+  COMMAND_STATE_QUEUED = 1;
+  COMMAND_STATE_LEASED = 2;
+  COMMAND_STATE_IN_FLIGHT = 3;
+  COMMAND_STATE_RETRY_WAIT = 4;
+  COMMAND_STATE_ACKNOWLEDGED = 5;
+  COMMAND_STATE_EXPIRED = 6;
+  COMMAND_STATE_DEAD_LETTER = 7;
+  COMMAND_STATE_CANCELLED = 8;
+}
