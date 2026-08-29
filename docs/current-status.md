@@ -77,7 +77,10 @@ The following passed on this workstation:
   `EXPIRED` and advances the cursor, and the successor then leases.
 - Migration `000002` applying, rolling back, and reapplying its indexes.
 - Gateway hub registration, pre-session frame replay, backlog rejection,
-  session fencing, and unregister routing under the race detector.
+  session fencing, unregister routing, control-stream reconnect, and hub rebind
+  under the race detector.
+- Duplicate device-stream delivery invoking the client handler once and
+  producing matching ACKs, plus persist-before-ACK surviving a failed ACK send.
 - `scripts/smoke-online.ps1`: built `orbitd`, gateway, and client running as
   three separate processes, one `orbitctl` submission, and the command reaching
   durable `ACKNOWLEDGED`. The recorded evidence was `attempt_count` 1,
@@ -103,8 +106,9 @@ leaving the container in a restart loop; the mount is now `/var/lib/postgresql`.
 The online happy path is proven end to end across separate processes. Gateway
 control reconnect is implemented: the gateway no longer exits when its control
 stream fails, and it drops device sessions so they re-register after `orbitd`
-restarts. The next implementation units are the duplicate-delivery and
-disconnect-during-send process tests, plus a bounded reconnect soak.
+restarts. The next implementation units are a bounded reconnect soak and process-level
+shutdown tests. Duplicate transport and disconnect-during-ACK are covered for
+`RunSession`; they have not yet been driven through separate OS processes.
 
 Only the online path and control-stream reconnect unit tests have been
 demonstrated. No performance, scale, failover, or complete at-least-once claim
@@ -112,7 +116,8 @@ is justified yet, and the README contains no benchmark numbers.
 
 ## Open Phase 2 work
 
-- Add duplicate-delivery and disconnect-during-send process tests.
+- Drive duplicate-delivery and disconnect-during-ACK through separate
+  processes, not only the `RunSession` stream tests.
 - Confirm `scripts/smoke-online.ps1` still reaches `ACKNOWLEDGED` after the
   mid-run `orbitd` restart against real PostgreSQL.
 - Test graceful shutdown using built executables. On Windows, Ctrl+C sent to
@@ -147,6 +152,7 @@ is justified yet, and the README contains no benchmark numbers.
 3. Start the Compose PostgreSQL service and run `scripts/smoke-online.ps1` to
    confirm the online path still reaches durable `ACKNOWLEDGED` after an
    `orbitd` restart.
-4. Add the duplicate-delivery and disconnect-during-send process tests.
-5. Add a bounded reconnect soak with memory and goroutine assertions.
-6. Update this ledger and the invariant evidence table with the result.
+4. Drive duplicate-delivery and disconnect-during-ACK through separate
+   processes, or add a bounded reconnect soak with memory and goroutine
+   assertions.
+5. Update this ledger and the invariant evidence table with the result.
