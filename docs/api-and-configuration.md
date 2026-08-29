@@ -47,9 +47,11 @@ gateway returns `SessionOpened` followed by `CommandDelivery` frames. Delivery
 and acknowledgement frames carry both the authoritative session epoch and the
 command lease token.
 
-The current protocol does not yet include heartbeat frames. Gateway-control
-reconnection and the reference-client executable reconnect loop are also still
-open Phase 2 work.
+The current protocol does not yet include heartbeat frames. The gateway and
+reference client both retry failed streams with bounded, jittered backoff.
+Device sessions cannot outlive the control stream that created them: an
+`orbitd` restart makes the gateway drop device connections so they re-register
+for fresh session epochs.
 
 ## Runtime configuration
 
@@ -77,6 +79,9 @@ The gateway process reads a separate bounded configuration:
 | `ORBIT_GATEWAY_SHUTDOWN_TIMEOUT` | `10s` | 1 second through 2 minutes |
 | `ORBIT_GATEWAY_CONTROL_BUFFER` | `256` | 1 through 4,096 frames |
 | `ORBIT_DEVICE_CONNECTION_BUFFER` | `16` | 1 through 256 frames per device |
+| `ORBIT_GATEWAY_MAX_RECONNECT_ATTEMPTS` | `0` | 0 through 1,000; 0 retries while the process runs |
+| `ORBIT_GATEWAY_RECONNECT_INITIAL_DELAY` | `250ms` | 10 milliseconds through 10 seconds |
+| `ORBIT_GATEWAY_RECONNECT_MAX_DELAY` | `10s` | 100 milliseconds through 2 minutes, and not below the initial delay |
 
 The reference client process reads its own bounded configuration:
 
@@ -93,7 +98,8 @@ The reference client process reads its own bounded configuration:
 
 Reconnect delay doubles after each consecutive failure until it reaches the
 maximum, and each wait is jittered across the upper half of its window. A
-session that stays open for at least 30 seconds resets the delay.
+session or control stream that stays open for at least 30 seconds resets the
+delay. The gateway and client share that policy.
 
 The gRPC server limits sent and received messages to 70 KiB. The domain payload
 limit is lower so envelope overhead cannot exceed the transport bound.
@@ -128,7 +134,9 @@ go run ./cmd/client
 
 To exercise all three processes together against real PostgreSQL, run the
 online smoke path. It builds the executables, starts each component as its own
-process, submits one command, and waits for durable `ACKNOWLEDGED`:
+process, submits one command, waits for durable `ACKNOWLEDGED`, restarts
+`orbitd` while the gateway stays up, and asserts a second command still
+reaches `ACKNOWLEDGED`:
 
 ```powershell
 ./scripts/smoke-online.ps1

@@ -18,13 +18,16 @@ type HubConfig struct {
 	ConnectionBuffer int
 }
 
+// Hub fans control-plane frames out to connected devices. Its disconnect
+// signal is per control stream rather than for the lifetime of the process, so
+// a gateway can rebind to a new stream after the control plane restarts.
 type Hub struct {
 	gatewayID        string
 	connectionBuffer int
 	outbound         chan *orbitv1.GatewayFrame
-	done             chan struct{}
-	failOnce         sync.Once
 	mu               sync.RWMutex
+	done             chan struct{}
+	failed           bool
 	connections      map[string]*Connection
 }
 
@@ -33,6 +36,7 @@ type Connection struct {
 	DeviceID     string
 	SessionEpoch int64
 	frames       chan *orbitv1.ControlFrame
+	done         <-chan struct{}
 }
 
 func NewHub(config HubConfig) (*Hub, error) {
@@ -56,10 +60,52 @@ func NewHub(config HubConfig) (*Hub, error) {
 }
 
 func (h *Hub) Outbound() <-chan *orbitv1.GatewayFrame { return h.outbound }
-func (h *Hub) Done() <-chan struct{}                  { return h.done }
+
+// Done reports the disconnect signal for the control stream that is current
+// when it is called. Callers capture it once and keep selecting on it, so a
+// rebind unwinds work that belongs to the superseded stream.
+func (h *Hub) Done() <-chan struct{} {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.done
+}
 
 func (h *Hub) Fail() {
-	h.failOnce.Do(func() { close(h.done) })
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.failLocked()
+}
+
+func (h *Hub) failLocked() {
+	if !h.failed {
+		h.failed = true
+		close(h.done)
+	}
+}
+
+// Rebind prepares the hub for a replacement control stream.
+//
+// Device sessions cannot outlive the control stream that created them. The
+// control plane releases every session when its stream ends and issues fresh
+// epochs on reconnect, so a surviving connection would hold an epoch the
+// control plane will never dispatch to. Rebind therefore drops the existing
+// connections, discards outbound frames that describe them, and installs a
+// fresh disconnect signal. Devices reconnect and register again.
+func (h *Hub) Rebind() {
+	h.mu.Lock()
+	h.failLocked()
+	h.connections = make(map[string]*Connection)
+	h.done = make(chan struct{})
+	h.failed = false
+	h.mu.Unlock()
+
+	for {
+		select {
+		case <-h.outbound:
+		default:
+			return
+		}
+	}
 }
 
 func (h *Hub) Register(
@@ -75,10 +121,15 @@ func (h *Hub) Register(
 	if err != nil {
 		return nil, err
 	}
+	// Bind the registration to the control stream that is current now, so a
+	// rebind midway through aborts it instead of opening a session against a
+	// stream that has already gone.
+	done := h.Done()
 	connection := &Connection{
 		ID:       connectionID,
 		DeviceID: acquisition.DeviceID,
 		frames:   make(chan *orbitv1.ControlFrame, h.connectionBuffer),
+		done:     done,
 	}
 	h.mu.Lock()
 	if _, exists := h.connections[connectionID]; exists {
@@ -109,7 +160,7 @@ func (h *Hub) Register(
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-h.done:
+		case <-done:
 			return nil, ErrControlDisconnected
 		case frame := <-connection.frames:
 			opened := frame.GetDeviceSession()
@@ -137,7 +188,7 @@ func (h *Hub) Register(
 				case connection.frames <- queued:
 				case <-ctx.Done():
 					return nil, ctx.Err()
-				case <-h.done:
+				case <-done:
 					return nil, ErrControlDisconnected
 				}
 			}
@@ -181,7 +232,7 @@ func (h *Hub) Deliver(ctx context.Context, frame *orbitv1.ControlFrame) error {
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
-	case <-h.done:
+	case <-h.Done():
 		return ErrControlDisconnected
 	}
 }
@@ -209,7 +260,7 @@ func (h *Hub) send(ctx context.Context, frame *orbitv1.GatewayFrame) error {
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
-	case <-h.done:
+	case <-h.Done():
 		return ErrControlDisconnected
 	}
 }
@@ -223,3 +274,8 @@ func (h *Hub) remove(connectionID string, expected *Connection) {
 }
 
 func (c *Connection) Frames() <-chan *orbitv1.ControlFrame { return c.frames }
+
+// Disconnected closes when the control stream that opened this session ends.
+// The session cannot be served past that point, because the control plane has
+// released it and will issue a new epoch, so the device stream must end too.
+func (c *Connection) Disconnected() <-chan struct{} { return c.done }

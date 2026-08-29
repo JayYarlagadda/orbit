@@ -11,9 +11,10 @@ lease-token and session-epoch fencing, lease recovery, terminal command
 expiration, ACK persistence, the gateway-control stream, the standalone gateway,
 and the reference client are implemented. A single command has been carried from
 a producer to a device and back to durable `ACKNOWLEDGED` across separate
-processes. Control-stream reconnect, failure-path process tests, and the Phase 2
-shutdown/soak gates remain pending. See
-[current status](docs/current-status.md) for exact evidence and open work.
+processes. The gateway reconnects to the control plane after an `orbitd`
+restart. Failure-path process tests and the Phase 2 shutdown/soak gates remain
+pending. See [current status](docs/current-status.md) for exact evidence and
+open work.
 
 ## Project thesis
 

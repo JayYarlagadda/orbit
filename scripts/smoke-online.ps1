@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
 Runs the online producer-to-device-to-acknowledgement path across separate
-orbitd, gateway, and client processes.
+orbitd, gateway, and client processes, then restarts orbitd and repeats.
 
 .DESCRIPTION
 Builds the executables, starts each component as its own process, submits one
@@ -109,8 +109,12 @@ try {
     $env:ORBIT_CLIENT_GATEWAY_ADDRESS = '127.0.0.1:50052'
     $env:ORBIT_CLIENT_STATE_PATH = $statePath
     $env:ORBIT_CLIENT_MAX_RECONNECT_ATTEMPTS = '5'
+    $env:ORBIT_GATEWAY_MAX_RECONNECT_ATTEMPTS = '0'
+    $env:ORBIT_GATEWAY_RECONNECT_INITIAL_DELAY = '50ms'
+    $env:ORBIT_GATEWAY_RECONNECT_MAX_DELAY = '1s'
 
-    $processes.Add((Start-OrbitProcess -Name 'orbitd' -Path (Join-Path $binDirectory 'orbitd.exe') -LogDirectory $runDirectory))
+    $orbitd = Start-OrbitProcess -Name 'orbitd' -Path (Join-Path $binDirectory 'orbitd.exe') -LogDirectory $runDirectory
+    $processes.Add($orbitd)
     if (-not (Wait-OrbitPort -Port 50051 -Seconds 20)) { throw 'orbitd did not begin listening on 50051' }
 
     $processes.Add((Start-OrbitProcess -Name 'gateway' -Path (Join-Path $binDirectory 'gateway.exe') -LogDirectory $runDirectory))
@@ -153,6 +157,40 @@ try {
     }
 
     Write-Host "==> command $commandID is durably ACKNOWLEDGED"
+
+    Write-Host '==> restarting orbitd while the gateway stays up'
+    Stop-Process -Id $orbitd.Id -Force
+    $orbitd.WaitForExit(10000) | Out-Null
+    $orbitd = Start-OrbitProcess -Name 'orbitd-restart' -Path (Join-Path $binDirectory 'orbitd.exe') -LogDirectory $runDirectory
+    $processes.Add($orbitd)
+    if (-not (Wait-OrbitPort -Port 50051 -Seconds 20)) { throw 'restarted orbitd did not begin listening on 50051' }
+
+    # The control plane released device sessions on the previous stream, so the
+    # client must re-register before a command can be leased again.
+    Start-Sleep -Seconds 2
+    $restartKey = "smoke-restart-$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())"
+    Write-Host '==> submitting a command after the orbitd restart'
+    $restarted = & $orbitctl submit -producer smoke-producer -idempotency-key $restartKey `
+        -device $DeviceID -priority 4 -payload collect-diagnostics-after-restart -expires-after 1h | ConvertFrom-Json
+    if ($LASTEXITCODE -ne 0) { throw "submit after restart failed with exit code $LASTEXITCODE" }
+    $restartCommandID = $restarted.command_id
+    Write-Host "==> submitted $restartCommandID"
+
+    Write-Host '==> waiting for the post-restart ACKNOWLEDGED state'
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    $state = ''
+    while ((Get-Date) -lt $deadline) {
+        $current = & $orbitctl get -command-id $restartCommandID | ConvertFrom-Json
+        if ($LASTEXITCODE -ne 0) { throw "get after restart failed with exit code $LASTEXITCODE" }
+        $state = $current.state
+        if ($state -eq 'COMMAND_STATE_ACKNOWLEDGED') { break }
+        Start-Sleep -Milliseconds 250
+    }
+    if ($state -ne 'COMMAND_STATE_ACKNOWLEDGED') {
+        throw "command $restartCommandID reached state '$state' instead of COMMAND_STATE_ACKNOWLEDGED after orbitd restart"
+    }
+
+    Write-Host "==> command $restartCommandID is durably ACKNOWLEDGED after orbitd restart"
     Write-Host "Orbit online smoke path passed. Logs are in $runDirectory."
 }
 finally {

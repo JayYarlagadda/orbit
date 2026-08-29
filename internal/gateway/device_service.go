@@ -58,6 +58,11 @@ func (s *DeviceService) Connect(stream orbitv1.DeviceService_ConnectServer) erro
 		select {
 		case <-stream.Context().Done():
 			return deviceStreamError(stream.Context().Err())
+		case <-connection.Disconnected():
+			// The control plane released this session, so nothing can be
+			// routed to it any more. Ending the stream makes the device
+			// reconnect and register for a fresh epoch.
+			return deviceStreamError(ErrControlDisconnected)
 		case result := <-received:
 			if result.err != nil {
 				return deviceStreamError(result.err)

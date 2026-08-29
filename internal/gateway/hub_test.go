@@ -278,3 +278,63 @@ func TestFailIsIdempotent(t *testing.T) {
 		t.Fatal("Done() was not closed after Fail()")
 	}
 }
+
+func TestRebindDropsConnectionsAndInstallsFreshDisconnectSignal(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+	hub := newTestHub(t, 4)
+	results := startRegister(t, ctx, hub, "connection-1", "device-1")
+	if err := hub.Deliver(ctx, sessionFrame("connection-1", "device-1", 3)); err != nil {
+		t.Fatalf("Deliver() error = %v", err)
+	}
+	result := awaitRegister(t, results)
+	if result.err != nil {
+		t.Fatalf("Register() error = %v", result.err)
+	}
+	if err := hub.ReportDeliveryStarted(ctx, &orbitv1.CommandDelivery{CommandId: "command-1"}); err != nil {
+		t.Fatalf("ReportDeliveryStarted() error = %v", err)
+	}
+
+	previous := hub.Done()
+	hub.Rebind()
+
+	select {
+	case <-previous:
+	default:
+		t.Fatal("the previous disconnect signal stayed open after Rebind()")
+	}
+	select {
+	case <-result.connection.Disconnected():
+	default:
+		t.Fatal("the dropped connection was not signaled after Rebind()")
+	}
+	select {
+	case <-hub.Done():
+		t.Fatal("the replacement disconnect signal was already closed")
+	default:
+	}
+
+	// Frames queued for the previous stream must not leak onto the next one.
+	select {
+	case frame := <-hub.Outbound():
+		t.Fatalf("outbound still held %+v after Rebind()", frame)
+	default:
+	}
+
+	if err := hub.Deliver(ctx, assignmentFrame("connection-1", "command-2")); err != nil {
+		t.Fatalf("Deliver() after Rebind error = %v", err)
+	}
+
+	// A new registration against the replacement stream must succeed.
+	results = startRegister(t, ctx, hub, "connection-2", "device-1")
+	if err := hub.Deliver(ctx, sessionFrame("connection-2", "device-1", 4)); err != nil {
+		t.Fatalf("Deliver(session after rebind) error = %v", err)
+	}
+	result = awaitRegister(t, results)
+	if result.err != nil {
+		t.Fatalf("Register() after Rebind error = %v", result.err)
+	}
+	if result.connection.SessionEpoch != 4 {
+		t.Fatalf("SessionEpoch = %d, want 4", result.connection.SessionEpoch)
+	}
+}

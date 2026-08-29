@@ -7,13 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"math/rand/v2"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	orbitv1 "github.com/JayYarlagadda/orbit/gen/orbit/v1"
+	"github.com/JayYarlagadda/orbit/internal/backoff"
 	"github.com/JayYarlagadda/orbit/internal/client"
 	"github.com/JayYarlagadda/orbit/internal/config"
 	"google.golang.org/grpc"
@@ -75,8 +75,10 @@ func run(logger *slog.Logger) error {
 		"state_path", settings.StatePath,
 	)
 
-	delay := settings.ReconnectInitialDelay
-	failures := 0
+	policy, err := backoff.New(settings.ReconnectInitialDelay, settings.ReconnectMaxDelay)
+	if err != nil {
+		return err
+	}
 	for {
 		startedAt := time.Now()
 		sessionErr := client.RunSession(
@@ -99,26 +101,21 @@ func run(logger *slog.Logger) error {
 		// A session that stayed up is evidence the endpoint recovered, so the
 		// next outage restarts from the initial delay rather than the cap.
 		if time.Since(startedAt) >= healthySession {
-			delay = settings.ReconnectInitialDelay
-			failures = 0
+			policy.Reset()
 		}
-		failures++
-		if settings.MaxReconnectAttempts > 0 && failures > settings.MaxReconnectAttempts {
-			return fmt.Errorf("device session failed %d consecutive times: %w", failures-1, sessionErr)
+		if settings.MaxReconnectAttempts > 0 && policy.Attempts() >= settings.MaxReconnectAttempts {
+			return fmt.Errorf(
+				"device session failed %d consecutive times: %w",
+				policy.Attempts()+1,
+				sessionErr,
+			)
 		}
 
-		wait := jitter(delay)
-		logger.Info("reconnecting", "attempt", failures, "delay", wait.String())
-		timer := time.NewTimer(wait)
-		select {
-		case <-rootContext.Done():
-			timer.Stop()
+		wait := policy.Next()
+		logger.Info("reconnecting", "attempt", policy.Attempts(), "delay", wait.String())
+		if err := backoff.Wait(rootContext, wait); err != nil {
 			logger.Info("client stopping", "last_seen_sequence", state.LastSeenSequence())
 			return nil
-		case <-timer.C:
-		}
-		if delay = delay * 2; delay > settings.ReconnectMaxDelay {
-			delay = settings.ReconnectMaxDelay
 		}
 	}
 }
@@ -136,16 +133,6 @@ func (h *applyHandler) Apply(_ context.Context, delivery *orbitv1.CommandDeliver
 		"payload_bytes", len(delivery.Payload),
 	)
 	return []byte("applied"), nil
-}
-
-// jitter spreads reconnects across the second half of the delay window so that
-// many devices recovering from one outage do not retry in lockstep.
-func jitter(delay time.Duration) time.Duration {
-	if delay <= 0 {
-		return 0
-	}
-	half := delay / 2
-	return half + time.Duration(rand.Int64N(int64(delay-half)+1))
 }
 
 func randomID() (string, error) {

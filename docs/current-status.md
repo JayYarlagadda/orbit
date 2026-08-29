@@ -13,7 +13,7 @@ this file records what actually exists and what has been verified.
 | M0 build | Complete locally | Go/C++ build, scenario fixtures, generated-code check, reversible PostgreSQL migration |
 | M1 durable API | Complete locally | Real gRPC submit/get/cancel against PostgreSQL 18.6; race-enabled repository suite |
 | M2 first delivery | Complete locally | Producer to device to durable `ACKNOWLEDGED` across separate `orbitd`, gateway, and client processes |
-| M3 recovery | Partial early work | Lease-expiry recovery and terminal TTL expiration exist; retry policy, dead letter, and admission control do not |
+| M3 recovery | Partial early work | Lease-expiry recovery and terminal TTL expiration exist; gateway-control reconnect exists; retry policy, dead letter, and admission control do not |
 | M4 replay | Foundation only | Stable C++ event queue and scenario contract exist; fault engine does not |
 | M5-M7 | Not started | No failover runner, telemetry stack, benchmark results, or release evidence |
 
@@ -43,7 +43,9 @@ this file records what actually exists and what has been verified.
   binary payload-file support, and protobuf JSON output.
 - Bounded scheduler cycle with injectable ticker/correlation factory.
 - Standalone gateway process, bounded control/per-device queues, serialized
-  stream writers, device session routing, and delivery/ACK forwarding.
+  stream writers, device session routing, delivery/ACK forwarding, and a
+  capped jittered control-stream reconnect loop. Device sessions are dropped
+  on rebind so they re-register for fresh epochs after an `orbitd` restart.
 - Reference-client executable with a capped, jittered reconnect loop, bounded
   consecutive-failure limit, durable dedup state, and signal-based shutdown.
 - Reference-client state library with payload-hash validation, atomic Windows
@@ -98,25 +100,28 @@ leaving the container in a restart loop; the mount is now `/var/lib/postgresql`.
 
 ## Current boundary
 
-The online happy path is proven end to end across separate processes, so the
-remaining Phase 2 work is failure behavior rather than first delivery. The next
-implementation units are gateway-control reconnect and the duplicate-delivery
-and disconnect-during-send process tests.
+The online happy path is proven end to end across separate processes. Gateway
+control reconnect is implemented: the gateway no longer exits when its control
+stream fails, and it drops device sessions so they re-register after `orbitd`
+restarts. The next implementation units are the duplicate-delivery and
+disconnect-during-send process tests, plus a bounded reconnect soak.
 
-Only the single-command online path has been demonstrated. No performance,
-scale, failover, or complete at-least-once claim is justified yet, and the
-README contains no benchmark numbers.
+Only the online path and control-stream reconnect unit tests have been
+demonstrated. No performance, scale, failover, or complete at-least-once claim
+is justified yet, and the README contains no benchmark numbers.
 
 ## Open Phase 2 work
 
-- Add gateway-control reconnect behavior and heartbeat frames.
 - Add duplicate-delivery and disconnect-during-send process tests.
+- Confirm `scripts/smoke-online.ps1` still reaches `ACKNOWLEDGED` after the
+  mid-run `orbitd` restart against real PostgreSQL.
 - Test graceful shutdown using built executables. On Windows, Ctrl+C sent to
   `go run` can terminate the wrapper while leaving its child process alive.
 - Add gateway device-stream integration tests and goroutine termination tests.
-  Hub registration and routing are now covered by unit tests, but
-  `RunControlStream` and `DeviceService.Connect` are not.
-- Add a bounded reconnect soak with memory and goroutine assertions.
+  Hub registration, rebind, and control reconnect are covered by unit tests,
+  but `DeviceService.Connect` is not.
+- Add heartbeat frames and a bounded reconnect soak with memory and goroutine
+  assertions.
 - Extend Compose beyond PostgreSQL after the process path is proven. The
   PostgreSQL service itself now starts and reports healthy.
 
@@ -124,8 +129,6 @@ README contains no benchmark numbers.
 
 - Local transport is plaintext and there is no producer/device authentication.
 - Gateway-control and device heartbeat messages are not defined yet.
-- The gateway exits when its control stream fails; automatic control reconnect
-  is not implemented.
 - Command TTL is enforced at submission, at lease selection, and by the terminal
   expiration sweep, but expiry is only observed when a scheduler cycle runs, so
   a device with no connected gateway keeps its expired commands until one does.
@@ -134,9 +137,7 @@ README contains no benchmark numbers.
 - Durable global/per-device admission limits are not implemented.
 - No history checker, closed-loop fault replay, telemetry pipeline, dashboards,
   release benchmark, or Kubernetes deployment exists.
-- Remote CI has not run and the repository has no Git remote.
-- The Git repository is initialized on `main`, but the implementation is still
-  uncommitted and all source files are currently untracked.
+- Remote CI has not run against the GitHub remote.
 
 ## Safe resume sequence
 
@@ -144,9 +145,8 @@ README contains no benchmark numbers.
 2. Start or verify PostgreSQL 18.6 and run the race-enabled storage suite with
    `ORBIT_TEST_DATABASE_URL`.
 3. Start the Compose PostgreSQL service and run `scripts/smoke-online.ps1` to
-   confirm the online path still reaches durable `ACKNOWLEDGED`.
-4. Implement gateway-control reconnect so the gateway survives an `orbitd`
-   restart instead of exiting, then extend the smoke script to restart `orbitd`
-   mid-run.
-5. Add the duplicate-delivery and disconnect-during-send process tests.
+   confirm the online path still reaches durable `ACKNOWLEDGED` after an
+   `orbitd` restart.
+4. Add the duplicate-delivery and disconnect-during-send process tests.
+5. Add a bounded reconnect soak with memory and goroutine assertions.
 6. Update this ledger and the invariant evidence table with the result.

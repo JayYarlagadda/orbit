@@ -65,11 +65,17 @@ func run(logger *slog.Logger) error {
 	defer controlConnection.Close()
 	controlErrors := make(chan error, 1)
 	go func() {
-		controlErrors <- gateway.RunControlStream(
+		controlErrors <- gateway.RunControl(
 			rootContext,
 			orbitv1.NewGatewayControlServiceClient(controlConnection),
 			hub,
-			instanceID,
+			gateway.ControlConfig{
+				GatewayInstanceID: instanceID,
+				InitialDelay:      settings.ReconnectInitialDelay,
+				MaxDelay:          settings.ReconnectMaxDelay,
+				MaxAttempts:       settings.MaxReconnectAttempts,
+				Logger:            logger,
+			},
 		)
 	}()
 

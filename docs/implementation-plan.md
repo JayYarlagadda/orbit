@@ -7,10 +7,9 @@ rollback, cancellation, and external CLI gates pass against PostgreSQL 18.6.
 Phase 2 is in progress: session epochs, ordered leasing, fencing, attempt
 records, lease-expiry recovery, acknowledgement persistence, gateway-control
 and device protocols, bounded scheduler and gateway queues, the gateway
-executable, and durable client state are implemented. The reference-client
-executable and complete process-level delivery/reconnect demonstration are the
-next work items. Detailed evidence and limitations are maintained in
-`current-status.md`.
+executable, durable client state, and control-stream reconnect are implemented.
+Duplicate-delivery and disconnect-during-send process tests are the next work
+items. Detailed evidence and limitations are maintained in `current-status.md`.
 
 ## 1. Execution rules
 
@@ -133,8 +132,9 @@ Status: complete and verified against PostgreSQL 18.6 on 2026-08-28.
 ## 5. Phase 2: one gateway and reliable client
 
 Status: in progress. Storage fencing, scheduling, protocols, gateway process,
-and durable client library are implemented; process-level delivery and soak
-gates remain open.
+and durable client library are implemented; process-level delivery is proven
+and control-stream reconnect is implemented. Duplicate-delivery, disconnect
+during send, and soak gates remain open.
 
 ### Work
 
