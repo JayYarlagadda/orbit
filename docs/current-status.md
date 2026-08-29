@@ -79,7 +79,9 @@ The following passed on this workstation:
 - Gateway hub registration, pre-session frame replay, backlog rejection,
   session fencing, unregister routing, control-stream reconnect, hub rebind,
   and `DeviceService.Connect` forwarding, rejection, rebind teardown, and
-  goroutine-count checks under the race detector.
+  goroutine-count checks under the race detector. A bounded reconnect soak
+  (25 control drop/reconnect cycles plus 30 device connect attempts) stayed
+  within 24 goroutines and 16 MiB heap of the post-warmup snapshot.
 - Duplicate device-stream delivery invoking the client handler once and
   producing matching ACKs, plus persist-before-ACK surviving a failed ACK send.
 - `scripts/smoke-online.ps1`: built `orbitd`, gateway, and client running as
@@ -110,13 +112,14 @@ stream fails, and it drops device sessions so they re-register after `orbitd`
 restarts. `DeviceService.Connect` is covered in-process: assignment and ACK
 forwarding, hello rejection, rebind teardown without leaking `DeviceOffline`
 onto the next control stream, and a bounded connect/disconnect goroutine check.
-The next implementation units are a bounded reconnect soak and process-level
-shutdown tests. Duplicate transport and disconnect-during-ACK are covered for
-`RunSession`; they have not yet been driven through separate OS processes.
+A reconnect soak covers control-stream churn with concurrent device connects.
+The next implementation units are process-level shutdown tests and driving
+duplicate-delivery through separate OS processes.
 
-Only the online path and control-stream reconnect unit tests have been
-demonstrated. No performance, scale, failover, or complete at-least-once claim
-is justified yet, and the README contains no benchmark numbers.
+Only in-process reconnect, device-stream, and soak checks have been added on
+top of the online path. No performance, scale, failover, or complete
+at-least-once claim is justified yet, and the README contains no benchmark
+numbers.
 
 ## Open Phase 2 work
 
@@ -126,8 +129,7 @@ is justified yet, and the README contains no benchmark numbers.
   mid-run `orbitd` restart against real PostgreSQL.
 - Test graceful shutdown using built executables. On Windows, Ctrl+C sent to
   `go run` can terminate the wrapper while leaving its child process alive.
-- Add heartbeat frames and a bounded reconnect soak with memory and goroutine
-  assertions.
+- Add heartbeat frames.
 - Extend Compose beyond PostgreSQL after the process path is proven. The
   PostgreSQL service itself now starts and reports healthy.
 
@@ -153,6 +155,6 @@ is justified yet, and the README contains no benchmark numbers.
 3. Start the Compose PostgreSQL service and run `scripts/smoke-online.ps1` to
    confirm the online path still reaches durable `ACKNOWLEDGED` after an
    `orbitd` restart.
-4. Add a bounded reconnect soak with memory and goroutine assertions, or drive
-   duplicate-delivery through separate processes.
+4. Test graceful shutdown using built executables, or drive duplicate-delivery
+   through separate processes.
 5. Update this ledger and the invariant evidence table with the result.

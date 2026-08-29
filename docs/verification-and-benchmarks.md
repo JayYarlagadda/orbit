@@ -64,7 +64,7 @@ evidence remain required.
 | INV-07 | Matching and conflicting idempotency integration tests | Concurrent duplicate producer test |
 | INV-08 | Session acquisition increments epochs; stale release/report rejected | Dual-gateway process scenario |
 | INV-09 | Cancellation and ACK advance contiguous terminal cursor | Expiry/dead-letter successor tests |
-| INV-10 | Scheduler, control stream, gateway, and per-device queues have validated bounds | Memory/connection soak test |
+| INV-10 | Scheduler, control stream, gateway, and per-device queues have validated bounds; reconnect soak keeps goroutine and heap drift inside documented slack | Process-level memory/connection soak |
 | INV-11 | Submit, cancel, lease, in-flight, retry-wait, and ACK audit writes share transactions | Audit history checker |
 
 PostgreSQL integration tests run against the real `postgres:18.6-bookworm`
