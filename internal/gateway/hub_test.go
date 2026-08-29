@@ -338,3 +338,27 @@ func TestRebindDropsConnectionsAndInstallsFreshDisconnectSignal(t *testing.T) {
 		t.Fatalf("SessionEpoch = %d, want 4", result.connection.SessionEpoch)
 	}
 }
+
+func TestUnregisterAfterRebindDoesNotEmitDeviceOffline(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+	hub := newTestHub(t, 4)
+	results := startRegister(t, ctx, hub, "connection-1", "device-1")
+	if err := hub.Deliver(ctx, sessionFrame("connection-1", "device-1", 3)); err != nil {
+		t.Fatalf("Deliver() error = %v", err)
+	}
+	result := awaitRegister(t, results)
+	if result.err != nil {
+		t.Fatalf("Register() error = %v", result.err)
+	}
+
+	hub.Rebind()
+	if err := hub.Unregister(ctx, result.connection); !errors.Is(err, ErrControlDisconnected) {
+		t.Fatalf("Unregister() after Rebind error = %v, want ErrControlDisconnected", err)
+	}
+	select {
+	case frame := <-hub.Outbound():
+		t.Fatalf("outbound held %+v after Unregister on a rebound connection", frame)
+	default:
+	}
+}

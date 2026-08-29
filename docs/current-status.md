@@ -77,8 +77,9 @@ The following passed on this workstation:
   `EXPIRED` and advances the cursor, and the successor then leases.
 - Migration `000002` applying, rolling back, and reapplying its indexes.
 - Gateway hub registration, pre-session frame replay, backlog rejection,
-  session fencing, unregister routing, control-stream reconnect, and hub rebind
-  under the race detector.
+  session fencing, unregister routing, control-stream reconnect, hub rebind,
+  and `DeviceService.Connect` forwarding, rejection, rebind teardown, and
+  goroutine-count checks under the race detector.
 - Duplicate device-stream delivery invoking the client handler once and
   producing matching ACKs, plus persist-before-ACK surviving a failed ACK send.
 - `scripts/smoke-online.ps1`: built `orbitd`, gateway, and client running as
@@ -106,7 +107,10 @@ leaving the container in a restart loop; the mount is now `/var/lib/postgresql`.
 The online happy path is proven end to end across separate processes. Gateway
 control reconnect is implemented: the gateway no longer exits when its control
 stream fails, and it drops device sessions so they re-register after `orbitd`
-restarts. The next implementation units are a bounded reconnect soak and process-level
+restarts. `DeviceService.Connect` is covered in-process: assignment and ACK
+forwarding, hello rejection, rebind teardown without leaking `DeviceOffline`
+onto the next control stream, and a bounded connect/disconnect goroutine check.
+The next implementation units are a bounded reconnect soak and process-level
 shutdown tests. Duplicate transport and disconnect-during-ACK are covered for
 `RunSession`; they have not yet been driven through separate OS processes.
 
@@ -122,9 +126,6 @@ is justified yet, and the README contains no benchmark numbers.
   mid-run `orbitd` restart against real PostgreSQL.
 - Test graceful shutdown using built executables. On Windows, Ctrl+C sent to
   `go run` can terminate the wrapper while leaving its child process alive.
-- Add gateway device-stream integration tests and goroutine termination tests.
-  Hub registration, rebind, and control reconnect are covered by unit tests,
-  but `DeviceService.Connect` is not.
 - Add heartbeat frames and a bounded reconnect soak with memory and goroutine
   assertions.
 - Extend Compose beyond PostgreSQL after the process path is proven. The
@@ -152,7 +153,6 @@ is justified yet, and the README contains no benchmark numbers.
 3. Start the Compose PostgreSQL service and run `scripts/smoke-online.ps1` to
    confirm the online path still reaches durable `ACKNOWLEDGED` after an
    `orbitd` restart.
-4. Drive duplicate-delivery and disconnect-during-ACK through separate
-   processes, or add a bounded reconnect soak with memory and goroutine
-   assertions.
+4. Add a bounded reconnect soak with memory and goroutine assertions, or drive
+   duplicate-delivery through separate processes.
 5. Update this ledger and the invariant evidence table with the result.

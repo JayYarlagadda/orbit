@@ -64,6 +64,9 @@ func (s *DeviceService) Connect(stream orbitv1.DeviceService_ConnectServer) erro
 			// reconnect and register for a fresh epoch.
 			return deviceStreamError(ErrControlDisconnected)
 		case result := <-received:
+			if connection.ended() {
+				return deviceStreamError(ErrControlDisconnected)
+			}
 			if result.err != nil {
 				return deviceStreamError(result.err)
 			}
@@ -78,6 +81,9 @@ func (s *DeviceService) Connect(stream orbitv1.DeviceService_ConnectServer) erro
 				return deviceStreamError(err)
 			}
 		case controlFrame := <-connection.Frames():
+			if connection.ended() {
+				return deviceStreamError(ErrControlDisconnected)
+			}
 			assignment := controlFrame.GetCommandAssignment()
 			if assignment == nil || assignment.Command == nil {
 				return status.Error(codes.Internal, "gateway received invalid command assignment")

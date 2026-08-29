@@ -203,6 +203,12 @@ func (h *Hub) Unregister(ctx context.Context, connection *Connection) error {
 		return nil
 	}
 	h.remove(connection.ID, connection)
+	// A rebind already released this session on the previous control stream.
+	// Sending DeviceOffline now would attach it to the replacement stream,
+	// which never acquired this epoch.
+	if connection.ended() {
+		return ErrControlDisconnected
+	}
 	return h.send(ctx, &orbitv1.GatewayFrame{
 		Body: &orbitv1.GatewayFrame_DeviceOffline{DeviceOffline: &orbitv1.DeviceOffline{
 			ConnectionId: connection.ID,
@@ -279,3 +285,12 @@ func (c *Connection) Frames() <-chan *orbitv1.ControlFrame { return c.frames }
 // The session cannot be served past that point, because the control plane has
 // released it and will issue a new epoch, so the device stream must end too.
 func (c *Connection) Disconnected() <-chan struct{} { return c.done }
+
+func (c *Connection) ended() bool {
+	select {
+	case <-c.done:
+		return true
+	default:
+		return false
+	}
+}
