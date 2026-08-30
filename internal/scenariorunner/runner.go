@@ -307,8 +307,7 @@ func (r *Runner) runLifecycle(
 			return fmt.Errorf("unsupported lifecycle event type %q", event.Type)
 		}
 	}
-	<-ctx.Done()
-	return ctx.Err()
+	return nil
 }
 
 func envListenAddress(env []string) string {
