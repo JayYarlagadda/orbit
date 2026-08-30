@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net"
 	"os"
 	"path/filepath"
@@ -53,7 +54,7 @@ func TestCommandStoreIntegration(t *testing.T) {
 	t.Run("idempotency and terminal cursor", func(t *testing.T) {
 		resetDatabase(t, pool)
 		now := time.Date(2026, time.August, 27, 20, 0, 0, 0, time.UTC)
-		store := NewCommandStore(pool, integrationClock{now: now})
+		store := NewCommandStore(pool, integrationClock{now: now}, StorePolicy{})
 		firstSubmission := newIntegrationSubmission(t, "producer", "key-1", "device-1", "first", now)
 
 		first, created, err := store.Submit(ctx, firstSubmission, "test", "correlation-1")
@@ -90,7 +91,7 @@ func TestCommandStoreIntegration(t *testing.T) {
 	t.Run("concurrent sequence allocation", func(t *testing.T) {
 		resetDatabase(t, pool)
 		now := time.Date(2026, time.August, 27, 20, 0, 0, 0, time.UTC)
-		store := NewCommandStore(pool, integrationClock{now: now})
+		store := NewCommandStore(pool, integrationClock{now: now}, StorePolicy{})
 		const count = 16
 		sequences := make([]int64, count)
 		errorsByIndex := make([]error, count)
@@ -133,7 +134,7 @@ func TestCommandStoreIntegration(t *testing.T) {
 	t.Run("ordered lease and stale token fencing", func(t *testing.T) {
 		resetDatabase(t, pool)
 		now := time.Date(2026, time.August, 27, 20, 0, 0, 0, time.UTC)
-		store := NewCommandStore(pool, integrationClock{now: now})
+		store := NewCommandStore(pool, integrationClock{now: now}, StorePolicy{})
 		for _, device := range []string{"device-1", "device-2"} {
 			acquisition, err := session.NewAcquisition(device, "worker-1", "client-"+device)
 			if err != nil {
@@ -211,7 +212,7 @@ func TestCommandStoreIntegration(t *testing.T) {
 	t.Run("audit failure rolls back command and cursor", func(t *testing.T) {
 		resetDatabase(t, pool)
 		now := time.Date(2026, time.August, 27, 20, 0, 0, 0, time.UTC)
-		store := NewCommandStore(pool, integrationClock{now: now})
+		store := NewCommandStore(pool, integrationClock{now: now}, StorePolicy{})
 		_, _, err := store.Submit(ctx,
 			newIntegrationSubmission(t, "rollback", "key", "device-rollback", "payload", now),
 			"test",
@@ -236,7 +237,7 @@ func TestCommandStoreIntegration(t *testing.T) {
 	t.Run("expired lease is recoverable with a higher token", func(t *testing.T) {
 		resetDatabase(t, pool)
 		now := time.Date(2026, time.August, 27, 20, 0, 0, 0, time.UTC)
-		store := NewCommandStore(pool, integrationClock{now: now})
+		store := NewCommandStore(pool, integrationClock{now: now}, StorePolicy{})
 		acquisition, err := session.NewAcquisition("retry-device", "retry-gateway", "retry-client")
 		if err != nil {
 			t.Fatal(err)
@@ -260,12 +261,13 @@ func TestCommandStoreIntegration(t *testing.T) {
 			t.Fatalf("first LeaseNext() = (%+v, %v)", first, err)
 		}
 
-		laterStore := NewCommandStore(pool, integrationClock{now: now.Add(2 * time.Second)})
+		laterStore := NewCommandStore(pool, integrationClock{now: now.Add(2 * time.Second)}, StorePolicy{})
 		swept, err := laterStore.SweepExpiredLeases(ctx, 10, "retry-sweep")
 		if err != nil || swept != 1 {
 			t.Fatalf("SweepExpiredLeases() = (%d, %v)", swept, err)
 		}
-		second, err := laterStore.LeaseNext(ctx, leaseRequest, "retry-lease-2")
+		retryStore := NewCommandStore(pool, integrationClock{now: now.Add(2*time.Second + command.DefaultRetryMaxDelay)}, StorePolicy{})
+		second, err := retryStore.LeaseNext(ctx, leaseRequest, "retry-lease-2")
 		if err != nil || len(second) != 1 || second[0].Command.LeaseToken != 2 || second[0].Command.AttemptCount != 2 {
 			t.Fatalf("second LeaseNext() = (%+v, %v)", second, err)
 		}
@@ -285,7 +287,7 @@ func TestCommandStoreIntegration(t *testing.T) {
 	t.Run("acknowledgement is fenced and idempotent", func(t *testing.T) {
 		resetDatabase(t, pool)
 		now := time.Date(2026, time.August, 27, 20, 0, 0, 0, time.UTC)
-		store := NewCommandStore(pool, integrationClock{now: now})
+		store := NewCommandStore(pool, integrationClock{now: now}, StorePolicy{})
 		acquisition, err := session.NewAcquisition("ack-device", "ack-gateway", "ack-client")
 		if err != nil {
 			t.Fatal(err)
@@ -352,7 +354,7 @@ func TestCommandStoreIntegration(t *testing.T) {
 	t.Run("expired command does not block its successors", func(t *testing.T) {
 		resetDatabase(t, pool)
 		now := time.Date(2026, time.August, 27, 20, 0, 0, 0, time.UTC)
-		store := NewCommandStore(pool, integrationClock{now: now})
+		store := NewCommandStore(pool, integrationClock{now: now}, StorePolicy{})
 		acquisition, err := session.NewAcquisition("expiry-device", "expiry-gateway", "expiry-client")
 		if err != nil {
 			t.Fatal(err)
@@ -377,7 +379,7 @@ func TestCommandStoreIntegration(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		laterStore := NewCommandStore(pool, integrationClock{now: now.Add(2 * time.Minute)})
+		laterStore := NewCommandStore(pool, integrationClock{now: now.Add(2 * time.Minute)}, StorePolicy{})
 		leaseRequest, err := command.NewLeaseRequest("expiry-gateway", 10, 30*time.Second)
 		if err != nil {
 			t.Fatal(err)
@@ -408,10 +410,157 @@ func TestCommandStoreIntegration(t *testing.T) {
 		}
 	})
 
+	t.Run("expired lease schedules retry with backoff", func(t *testing.T) {
+		resetDatabase(t, pool)
+		now := time.Date(2026, time.August, 27, 20, 0, 0, 0, time.UTC)
+		retryPolicy := command.RetryPolicy{
+			MaxAttempts: 5,
+			BaseDelay:   100 * time.Millisecond,
+			MaxDelay:    800 * time.Millisecond,
+		}
+		store := NewCommandStore(pool, integrationClock{now: now}, StorePolicy{Retry: retryPolicy})
+		store.SetRetryRNG(rand.New(rand.NewSource(7)))
+		acquisition, err := session.NewAcquisition("backoff-device", "backoff-gateway", "backoff-client")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := store.AcquireSession(ctx, acquisition); err != nil {
+			t.Fatal(err)
+		}
+		submitted, _, err := store.Submit(ctx,
+			newIntegrationSubmission(t, "backoff-producer", "backoff-key", "backoff-device", "payload", now),
+			"test",
+			"backoff-submit",
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		leaseRequest, err := command.NewLeaseRequest("backoff-gateway", 1, time.Second)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := store.LeaseNext(ctx, leaseRequest, "backoff-lease-1"); err != nil {
+			t.Fatal(err)
+		}
+		sweepAt := now.Add(2 * time.Second)
+		sweepStore := NewCommandStore(pool, integrationClock{now: sweepAt}, StorePolicy{Retry: retryPolicy})
+		sweepStore.SetRetryRNG(rand.New(rand.NewSource(7)))
+		if _, err := sweepStore.SweepExpiredLeases(ctx, 10, "backoff-sweep"); err != nil {
+			t.Fatal(err)
+		}
+		retrying, err := sweepStore.Get(ctx, submitted.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if retrying.State != command.StateRetryWait {
+			t.Fatalf("state = %s, want RETRY_WAIT", retrying.State)
+		}
+		wantNext := retryPolicy.NextAttemptAt(1, sweepAt, rand.New(rand.NewSource(7)))
+		if !retrying.NextAttemptAt.Equal(wantNext) {
+			t.Fatalf("next_attempt_at = %s, want %s", retrying.NextAttemptAt, wantNext)
+		}
+	})
+
+	t.Run("retry budget exhaustion dead letters the command", func(t *testing.T) {
+		resetDatabase(t, pool)
+		now := time.Date(2026, time.August, 27, 20, 0, 0, 0, time.UTC)
+		retryPolicy := command.RetryPolicy{
+			MaxAttempts: 2,
+			BaseDelay:   10 * time.Millisecond,
+			MaxDelay:    10 * time.Millisecond,
+		}
+		store := NewCommandStore(pool, integrationClock{now: now}, StorePolicy{Retry: retryPolicy})
+		acquisition, err := session.NewAcquisition("deadletter-device", "deadletter-gateway", "deadletter-client")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := store.AcquireSession(ctx, acquisition); err != nil {
+			t.Fatal(err)
+		}
+		submitted, _, err := store.Submit(ctx,
+			newIntegrationSubmission(t, "deadletter-producer", "deadletter-key", "deadletter-device", "payload", now),
+			"test",
+			"deadletter-submit",
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		leaseRequest, err := command.NewLeaseRequest("deadletter-gateway", 1, time.Second)
+		if err != nil {
+			t.Fatal(err)
+		}
+		firstLeaseStore := NewCommandStore(pool, integrationClock{now: now}, StorePolicy{Retry: retryPolicy})
+		if _, err := firstLeaseStore.LeaseNext(ctx, leaseRequest, "deadletter-lease-1"); err != nil {
+			t.Fatal(err)
+		}
+		firstSweepAt := now.Add(2 * time.Second)
+		firstSweepStore := NewCommandStore(pool, integrationClock{now: firstSweepAt}, StorePolicy{Retry: retryPolicy})
+		if _, err := firstSweepStore.SweepExpiredLeases(ctx, 10, "deadletter-sweep-1"); err != nil {
+			t.Fatal(err)
+		}
+		secondLeaseAt := firstSweepAt.Add(retryPolicy.MaxDelay)
+		secondLeaseStore := NewCommandStore(pool, integrationClock{now: secondLeaseAt}, StorePolicy{Retry: retryPolicy})
+		if _, err := secondLeaseStore.LeaseNext(ctx, leaseRequest, "deadletter-lease-2"); err != nil {
+			t.Fatal(err)
+		}
+		secondSweepAt := secondLeaseAt.Add(2 * time.Second)
+		secondSweepStore := NewCommandStore(pool, integrationClock{now: secondSweepAt}, StorePolicy{Retry: retryPolicy})
+		if _, err := secondSweepStore.SweepExpiredLeases(ctx, 10, "deadletter-sweep-2"); err != nil {
+			t.Fatal(err)
+		}
+		finalStore := NewCommandStore(pool, integrationClock{now: secondSweepAt}, StorePolicy{Retry: retryPolicy})
+		deadLettered, err := finalStore.Get(ctx, submitted.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if deadLettered.State != command.StateDeadLetter {
+			t.Fatalf("state = %s, want DEAD_LETTER", deadLettered.State)
+		}
+		if deadLettered.FailureReason != retryBudgetExhaustedReason {
+			t.Fatalf("failure_reason = %q, want %q", deadLettered.FailureReason, retryBudgetExhaustedReason)
+		}
+	})
+
+	t.Run("admission limits reject durable overload", func(t *testing.T) {
+		resetDatabase(t, pool)
+		now := time.Date(2026, time.August, 27, 20, 0, 0, 0, time.UTC)
+		store := NewCommandStore(pool, integrationClock{now: now}, StorePolicy{
+			Admission: command.AdmissionLimits{GlobalMax: 2, PerDeviceMax: 1},
+		})
+		if _, _, err := store.Submit(ctx,
+			newIntegrationSubmission(t, "admission-producer", "admission-key-1", "device-a", "payload", now),
+			"test",
+			"admission-submit-1",
+		); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := store.Submit(ctx,
+			newIntegrationSubmission(t, "admission-producer", "admission-key-2", "device-a", "payload", now),
+			"test",
+			"admission-submit-2",
+		); !errors.Is(err, command.ErrAdmissionLimited) {
+			t.Fatalf("per-device Submit() error = %v, want ErrAdmissionLimited", err)
+		}
+		if _, _, err := store.Submit(ctx,
+			newIntegrationSubmission(t, "admission-producer", "admission-key-3", "device-b", "payload", now),
+			"test",
+			"admission-submit-3",
+		); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := store.Submit(ctx,
+			newIntegrationSubmission(t, "admission-producer", "admission-key-4", "device-c", "payload", now),
+			"test",
+			"admission-submit-4",
+		); !errors.Is(err, command.ErrAdmissionLimited) {
+			t.Fatalf("global Submit() error = %v, want ErrAdmissionLimited", err)
+		}
+	})
+
 	t.Run("grpc submit get cancel workflow", func(t *testing.T) {
 		resetDatabase(t, pool)
 		now := time.Date(2026, time.August, 27, 20, 0, 0, 0, time.UTC)
-		store := NewCommandStore(pool, integrationClock{now: now})
+		store := NewCommandStore(pool, integrationClock{now: now}, StorePolicy{})
 		listener := bufconn.Listen(1024 * 1024)
 		server := grpc.NewServer()
 		orbitv1.RegisterCommandServiceServer(server, commandservice.New(store, integrationClock{now: now}))

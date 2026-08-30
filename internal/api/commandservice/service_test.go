@@ -116,6 +116,7 @@ func TestServiceErrorMapping(t *testing.T) {
 	}{
 		{name: "not found", err: command.ErrNotFound, code: codes.NotFound},
 		{name: "conflict", err: command.ErrIdempotencyConflict, code: codes.AlreadyExists},
+		{name: "admission", err: command.ErrAdmissionLimited, code: codes.ResourceExhausted},
 		{name: "transition", err: &command.TransitionError{From: command.StateLeased, To: command.StateCancelled}, code: codes.FailedPrecondition},
 		{name: "canceled", err: context.Canceled, code: codes.Canceled},
 		{name: "internal", err: errors.New("database password leaked here"), code: codes.Internal},

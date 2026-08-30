@@ -110,6 +110,7 @@ var (
 	ErrNotFound            = errors.New("command not found")
 	ErrIdempotencyConflict = errors.New("idempotency key conflicts with an existing command")
 	ErrStaleLease          = errors.New("command lease is stale or no longer active")
+	ErrAdmissionLimited    = errors.New("command admission limit reached")
 )
 
 type LeaseRequest struct {

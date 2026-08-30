@@ -147,6 +147,8 @@ func mapError(err error) error {
 		return status.Error(codes.AlreadyExists, command.ErrIdempotencyConflict.Error())
 	case errors.Is(err, command.ErrNotFound):
 		return status.Error(codes.NotFound, command.ErrNotFound.Error())
+	case errors.Is(err, command.ErrAdmissionLimited):
+		return status.Error(codes.ResourceExhausted, command.ErrAdmissionLimited.Error())
 	case errors.As(err, &transitionError):
 		return status.Error(codes.FailedPrecondition, transitionError.Error())
 	case errors.Is(err, context.Canceled):

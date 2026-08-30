@@ -68,6 +68,11 @@ they re-register for fresh session epochs.
 | `ORBIT_SCHEDULER_SWEEP_BATCH` | `64` | 1 through 256 commands |
 | `ORBIT_SCHEDULER_LEASE_DURATION` | `15s` | 1 second through 5 minutes |
 | `ORBIT_SCHEDULER_POLL_INTERVAL` | `250ms` | 10 milliseconds through 1 minute |
+| `ORBIT_MAX_DELIVERY_ATTEMPTS` | `5` | 1 through 100 lease attempts before dead letter |
+| `ORBIT_RETRY_BASE_DELAY` | `250ms` | 10 milliseconds through 1 minute |
+| `ORBIT_RETRY_MAX_DELAY` | `30s` | 1 second through 30 minutes |
+| `ORBIT_GLOBAL_ADMISSION_LIMIT` | `10000` | 1 through 1000000 outstanding commands |
+| `ORBIT_PER_DEVICE_ADMISSION_LIMIT` | `256` | 1 through 100000 outstanding commands per device |
 | `ORBIT_CONTROL_HEARTBEAT_INTERVAL` | `5s` | 10 milliseconds through 1 minute |
 | `ORBIT_CONTROL_HEARTBEAT_TIMEOUT` | `15s` | 100 milliseconds through 5 minutes, and not below the interval |
 

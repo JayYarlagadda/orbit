@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/JayYarlagadda/orbit/internal/command"
 	"github.com/JayYarlagadda/orbit/internal/heartbeat"
 )
 
@@ -34,6 +35,11 @@ type Orbitd struct {
 	SchedulerPollInterval  time.Duration
 	HeartbeatInterval      time.Duration
 	HeartbeatTimeout       time.Duration
+	MaxDeliveryAttempts    int32
+	RetryBaseDelay         time.Duration
+	RetryMaxDelay          time.Duration
+	GlobalAdmissionLimit   int
+	PerDeviceAdmissionLimit int
 }
 
 func LoadOrbitd(lookup LookupEnv) (Orbitd, error) {
@@ -48,6 +54,11 @@ func LoadOrbitd(lookup LookupEnv) (Orbitd, error) {
 		SchedulerPollInterval:  defaultPollInterval,
 		HeartbeatInterval:      heartbeat.DefaultInterval,
 		HeartbeatTimeout:       heartbeat.DefaultTimeout,
+		MaxDeliveryAttempts:    command.DefaultMaxDeliveryAttempts,
+		RetryBaseDelay:         command.DefaultRetryBaseDelay,
+		RetryMaxDelay:          command.DefaultRetryMaxDelay,
+		GlobalAdmissionLimit:   command.DefaultGlobalAdmissionLimit,
+		PerDeviceAdmissionLimit: command.DefaultPerDeviceAdmissionLimit,
 	}
 
 	if value, ok := lookup("ORBIT_LISTEN_ADDRESS"); ok {
@@ -122,6 +133,64 @@ func LoadOrbitd(lookup LookupEnv) (Orbitd, error) {
 		&config.HeartbeatTimeout,
 	); err != nil {
 		return Orbitd{}, err
+	}
+	if value, ok := lookup("ORBIT_MAX_DELIVERY_ATTEMPTS"); ok {
+		parsed, err := strconv.ParseInt(strings.TrimSpace(value), 10, 32)
+		if err != nil || parsed < 1 || parsed > 100 {
+			return Orbitd{}, fmt.Errorf("ORBIT_MAX_DELIVERY_ATTEMPTS must be between 1 and 100")
+		}
+		config.MaxDeliveryAttempts = int32(parsed)
+	}
+	retryDurations := []struct {
+		key     string
+		target  *time.Duration
+		minimum time.Duration
+		maximum time.Duration
+	}{
+		{key: "ORBIT_RETRY_BASE_DELAY", target: &config.RetryBaseDelay, minimum: 10 * time.Millisecond, maximum: time.Minute},
+		{key: "ORBIT_RETRY_MAX_DELAY", target: &config.RetryMaxDelay, minimum: time.Second, maximum: 30 * time.Minute},
+	}
+	for _, setting := range retryDurations {
+		if value, ok := lookup(setting.key); ok {
+			parsed, err := time.ParseDuration(strings.TrimSpace(value))
+			if err != nil || parsed < setting.minimum || parsed > setting.maximum {
+				return Orbitd{}, fmt.Errorf("%s must be between %s and %s", setting.key, setting.minimum, setting.maximum)
+			}
+			*setting.target = parsed
+		}
+	}
+	admissionSettings := []struct {
+		key     string
+		target  *int
+		minimum int64
+		maximum int64
+	}{
+		{key: "ORBIT_GLOBAL_ADMISSION_LIMIT", target: &config.GlobalAdmissionLimit, minimum: 1, maximum: 1_000_000},
+		{key: "ORBIT_PER_DEVICE_ADMISSION_LIMIT", target: &config.PerDeviceAdmissionLimit, minimum: 1, maximum: 100_000},
+	}
+	for _, setting := range admissionSettings {
+		if value, ok := lookup(setting.key); ok {
+			parsed, err := strconv.ParseInt(strings.TrimSpace(value), 10, 32)
+			if err != nil || parsed < setting.minimum || parsed > setting.maximum {
+				return Orbitd{}, fmt.Errorf("%s must be between %d and %d", setting.key, setting.minimum, setting.maximum)
+			}
+			*setting.target = int(parsed)
+		}
+	}
+	retryPolicy := command.RetryPolicy{
+		MaxAttempts: config.MaxDeliveryAttempts,
+		BaseDelay:   config.RetryBaseDelay,
+		MaxDelay:    config.RetryMaxDelay,
+	}
+	if err := retryPolicy.Validate(); err != nil {
+		return Orbitd{}, fmt.Errorf("retry policy: %w", err)
+	}
+	admissionLimits := command.AdmissionLimits{
+		GlobalMax:    config.GlobalAdmissionLimit,
+		PerDeviceMax: config.PerDeviceAdmissionLimit,
+	}
+	if err := admissionLimits.Validate(); err != nil {
+		return Orbitd{}, fmt.Errorf("admission limits: %w", err)
 	}
 	return config, nil
 }

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/JayYarlagadda/orbit/internal/command"
@@ -21,15 +22,36 @@ type SystemClock struct{}
 func (SystemClock) Now() time.Time { return time.Now().UTC() }
 
 type CommandStore struct {
-	pool  *pgxpool.Pool
-	clock Clock
+	pool      *pgxpool.Pool
+	clock     Clock
+	retry     command.RetryPolicy
+	admission command.AdmissionLimits
+	retryRNG  *rand.Rand
 }
 
-func NewCommandStore(pool *pgxpool.Pool, clock Clock) *CommandStore {
+func NewCommandStore(pool *pgxpool.Pool, clock Clock, policy StorePolicy) *CommandStore {
 	if clock == nil {
 		clock = SystemClock{}
 	}
-	return &CommandStore{pool: pool, clock: clock}
+	policy = policy.withDefaults()
+	return &CommandStore{
+		pool:      pool,
+		clock:     clock,
+		retry:     policy.Retry,
+		admission: policy.Admission,
+	}
+}
+
+// SetRetryRNG configures deterministic retry jitter for tests.
+func (s *CommandStore) SetRetryRNG(rng *rand.Rand) {
+	s.retryRNG = rng
+}
+
+func (s *CommandStore) retryRandom() *rand.Rand {
+	if s.retryRNG != nil {
+		return s.retryRNG
+	}
+	return rand.New(rand.NewSource(s.clock.Now().UnixNano()))
 }
 
 func Open(ctx context.Context, databaseURL string, maxConnections int32) (*pgxpool.Pool, error) {
@@ -100,6 +122,26 @@ func (s *CommandStore) Submit(
 		submission.DeviceID,
 	); err != nil {
 		return command.Command{}, false, fmt.Errorf("ensure device cursor: %w", err)
+	}
+
+	var globalOutstanding int
+	if err := tx.QueryRow(ctx,
+		`SELECT count(*) FROM orbit.commands WHERE state IN `+outstandingStatesSQL,
+	).Scan(&globalOutstanding); err != nil {
+		return command.Command{}, false, fmt.Errorf("count global outstanding commands: %w", err)
+	}
+	if globalOutstanding >= s.admission.GlobalMax {
+		return command.Command{}, false, command.ErrAdmissionLimited
+	}
+	var deviceOutstanding int
+	if err := tx.QueryRow(ctx,
+		`SELECT count(*) FROM orbit.commands WHERE device_id = $1 AND state IN `+outstandingStatesSQL,
+		submission.DeviceID,
+	).Scan(&deviceOutstanding); err != nil {
+		return command.Command{}, false, fmt.Errorf("count device outstanding commands: %w", err)
+	}
+	if deviceOutstanding >= s.admission.PerDeviceMax {
+		return command.Command{}, false, command.ErrAdmissionLimited
 	}
 
 	var sequenceNumber int64
@@ -456,7 +498,7 @@ func (s *CommandStore) SweepExpiredLeases(ctx context.Context, limit int, correl
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	rows, err := tx.Query(ctx, `
-		SELECT id::text, state::text, lease_token
+		SELECT id::text, state::text, lease_token, attempt_count
 		FROM orbit.commands
 		WHERE state IN ('LEASED', 'IN_FLIGHT') AND lease_expires_at <= $1
 		ORDER BY lease_expires_at, id
@@ -469,14 +511,15 @@ func (s *CommandStore) SweepExpiredLeases(ctx context.Context, limit int, correl
 		return 0, fmt.Errorf("select expired leases: %w", err)
 	}
 	type expiredLease struct {
-		id    string
-		state command.State
-		token int64
+		id           string
+		state        command.State
+		token        int64
+		attemptCount int32
 	}
 	var expired []expiredLease
 	for rows.Next() {
 		var item expiredLease
-		if err := rows.Scan(&item.id, &item.state, &item.token); err != nil {
+		if err := rows.Scan(&item.id, &item.state, &item.token, &item.attemptCount); err != nil {
 			rows.Close()
 			return 0, fmt.Errorf("scan expired lease: %w", err)
 		}
@@ -488,22 +531,75 @@ func (s *CommandStore) SweepExpiredLeases(ctx context.Context, limit int, correl
 	}
 	rows.Close()
 
+	retryRNG := s.retryRandom()
 	for _, item := range expired {
+		if s.retry.Exhausted(item.attemptCount) {
+			if err := command.ValidateTransition(item.state, command.StateDeadLetter); err != nil {
+				return 0, err
+			}
+			result, err := tx.Exec(ctx, `
+				UPDATE orbit.commands
+				SET state = 'DEAD_LETTER',
+					lease_owner = NULL,
+					lease_expires_at = NULL,
+					failure_reason = $3
+				WHERE id = $1 AND state = $2 AND lease_token = $4`,
+				item.id,
+				item.state,
+				retryBudgetExhaustedReason,
+				item.token,
+			)
+			if err != nil {
+				return 0, fmt.Errorf("dead-letter expired lease %s: %w", item.id, err)
+			}
+			if result.RowsAffected() != 1 {
+				return 0, command.ErrStaleLease
+			}
+			if _, err := tx.Exec(ctx, `
+				UPDATE orbit.delivery_attempts
+				SET finished_at = $3, outcome = 'LEASE_EXPIRED', reason = $4
+				WHERE command_id = $1 AND lease_token = $2 AND finished_at IS NULL`,
+				item.id,
+				item.token,
+				now,
+				retryBudgetExhaustedReason,
+			); err != nil {
+				return 0, fmt.Errorf("close dead-letter delivery attempt: %w", err)
+			}
+			if _, err := tx.Exec(ctx, `
+				INSERT INTO orbit.audit_events (
+					command_id, old_state, new_state, actor, lease_token, occurred_at,
+					correlation_id, details
+				) VALUES ($1, $2, 'DEAD_LETTER', 'lease-sweeper', $3, $4, $5,
+					'{"reason":"retry_budget_exhausted"}'::jsonb)`,
+				item.id,
+				item.state,
+				item.token,
+				now,
+				correlationID,
+			); err != nil {
+				return 0, fmt.Errorf("insert dead-letter audit event: %w", err)
+			}
+			continue
+		}
+
 		if err := command.ValidateTransition(item.state, command.StateRetryWait); err != nil {
 			return 0, err
 		}
+		nextAttemptAt := s.retry.NextAttemptAt(item.attemptCount, now, retryRNG)
 		result, err := tx.Exec(ctx, `
 			UPDATE orbit.commands
 			SET state = 'RETRY_WAIT',
 				lease_owner = NULL,
 				lease_expires_at = NULL,
 				next_attempt_at = $3,
-				failure_reason = 'lease expired'
+				failure_reason = $5
 			WHERE id = $1 AND state = $2 AND lease_token = $4`,
 			item.id,
 			item.state,
-			now,
+			nextAttemptAt,
 			item.token,
+			leaseExpiredReason,
 		)
 		if err != nil {
 			return 0, fmt.Errorf("release expired lease %s: %w", item.id, err)

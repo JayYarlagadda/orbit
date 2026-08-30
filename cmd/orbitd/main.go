@@ -10,6 +10,7 @@ import (
 	orbitv1 "github.com/JayYarlagadda/orbit/gen/orbit/v1"
 	"github.com/JayYarlagadda/orbit/internal/api/commandservice"
 	"github.com/JayYarlagadda/orbit/internal/api/gatewaycontrol"
+	"github.com/JayYarlagadda/orbit/internal/command"
 	"github.com/JayYarlagadda/orbit/internal/config"
 	"github.com/JayYarlagadda/orbit/internal/heartbeat"
 	"github.com/JayYarlagadda/orbit/internal/shutdownsignal"
@@ -54,7 +55,17 @@ func run(logger *slog.Logger) error {
 		grpc.MaxRecvMsgSize(maxGRPCMessageBytes),
 		grpc.MaxSendMsgSize(maxGRPCMessageBytes),
 	)
-	store := postgres.NewCommandStore(pool, nil)
+	store := postgres.NewCommandStore(pool, nil, postgres.StorePolicy{
+		Retry: command.RetryPolicy{
+			MaxAttempts: settings.MaxDeliveryAttempts,
+			BaseDelay:   settings.RetryBaseDelay,
+			MaxDelay:    settings.RetryMaxDelay,
+		},
+		Admission: command.AdmissionLimits{
+			GlobalMax:    settings.GlobalAdmissionLimit,
+			PerDeviceMax: settings.PerDeviceAdmissionLimit,
+		},
+	})
 	orbitv1.RegisterCommandServiceServer(server, commandservice.New(store, nil))
 	gatewayService, err := gatewaycontrol.New(store, gatewaycontrol.Config{
 		OutboundBuffer: settings.GatewayOutboundBuffer,

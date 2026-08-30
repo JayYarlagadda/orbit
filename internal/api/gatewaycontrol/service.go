@@ -338,6 +338,9 @@ type streamDispatcher struct {
 }
 
 func (d *streamDispatcher) Dispatch(ctx context.Context, lease command.Lease) error {
+	if !lease.Command.ExpiresAt.After(time.Now().UTC()) {
+		return fmt.Errorf("command %s expired before dispatch", lease.Command.ID)
+	}
 	route, ok := d.routes.get(lease.Command.DeviceID)
 	if !ok || route.epoch != lease.SessionEpoch {
 		return fmt.Errorf("no matching device route for epoch %d", lease.SessionEpoch)

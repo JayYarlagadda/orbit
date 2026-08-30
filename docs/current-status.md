@@ -1,6 +1,6 @@
 # Current Status
 
-Last reconciled: 2026-08-28.
+Last reconciled: 2026-08-29.
 
 This document is the implementation handoff ledger. The project brief describes
 why Orbit is worth building, the system design describes intended behavior, and
@@ -13,7 +13,7 @@ this file records what actually exists and what has been verified.
 | M0 build | Complete locally | Go/C++ build, scenario fixtures, generated-code check, reversible PostgreSQL migration |
 | M1 durable API | Complete locally | Real gRPC submit/get/cancel against PostgreSQL 18.6; race-enabled repository suite |
 | M2 first delivery | Complete locally | Producer to device to durable `ACKNOWLEDGED` across separate `orbitd`, gateway, and client processes |
-| M3 recovery | Partial early work | Lease-expiry recovery and terminal TTL expiration exist; gateway-control reconnect exists; retry policy, dead letter, and admission control do not |
+| M3 recovery | Complete locally | Capped exponential retry with full jitter, retry-budget dead letter, global/per-device admission limits, gateway-control reconnect, lease-expiry recovery, and terminal TTL expiration |
 | M4 replay | Foundation only | Stable C++ event queue and scenario contract exist; fault engine does not |
 | M5-M7 | Not started | No failover runner, telemetry stack, benchmark results, or release evidence |
 
@@ -32,6 +32,8 @@ this file records what actually exists and what has been verified.
 - Advisory-locked transactional migration runner with one-step rollback.
 - Transactional submit, get, cancel, ordered lease, in-flight, lease-expiry,
   terminal command-expiry, and acknowledgement repository operations.
+- Capped exponential retry scheduling with full jitter, retry-budget dead
+  lettering, and durable global/per-device admission limits on submit.
 - Terminal TTL expiration sweep that moves `QUEUED` and `RETRY_WAIT` commands
   past `expires_at` to `EXPIRED`, advances the terminal cursor, and runs in the
   scheduler cycle between the lease sweep and leasing.
@@ -66,10 +68,13 @@ The following passed on this workstation:
 - Audit-insert failure rolling back both command and cursor creation.
 - Earliest-sequence-only leasing across devices.
 - Stale lease token, stale session epoch, and mismatched newer epoch rejection.
-- Expired lease recovery to `RETRY_WAIT`, closed attempt outcome, and re-lease
-  with token 2.
+- Expired lease recovery to `RETRY_WAIT` with scheduled `next_attempt_at`,
+  closed attempt outcome, and re-lease with token 2.
 - Fenced acknowledgement, duplicate acknowledgement, terminal cursor advance,
   and successor eligibility.
+- Retry-budget exhaustion moving a command to `DEAD_LETTER` after repeated
+  lease expiry.
+- Per-device and global admission rejection without affecting unrelated devices.
 - Generated gRPC client submit/get/cancel workflow backed by the real store.
 - External `orbitd` plus `orbitctl` submit/get/cancel workflow.
 - An expired command no longer blocking its device queue: leasing returns
@@ -127,7 +132,10 @@ is not tested through `go run`. Duplicate delivery is proven across separate
 `gateway` and `client` processes: two assignments yield two ACKs with the same
 result hash and one handler invocation. A lost ACK followed by reconnect
 replays the command without a second apply. Heartbeat frames keep the control,
-gateway device, and client streams alive with a bounded silence timeout. The
+gateway device, and client streams alive with a bounded silence timeout. M3
+recovery policies are in place: lease expiry schedules capped exponential retry
+with full jitter, exhausted retry budgets dead-letter commands, and submit
+admission limits return `ResourceExhausted` when durable queues are full. The
 next implementation unit is confirming the mid-run `orbitd` restart in
 `scripts/smoke-online.ps1` against real PostgreSQL.
 
@@ -146,12 +154,10 @@ numbers.
 ## Known limitations
 
 - Local transport is plaintext and there is no producer/device authentication.
-- Command TTL is enforced at submission, at lease selection, and by the terminal
-  expiration sweep, but expiry is only observed when a scheduler cycle runs, so
-  a device with no connected gateway keeps its expired commands until one does.
-- Lease recovery retries immediately; exponential backoff, jitter, retry budget,
-  and dead-letter behavior are Phase 3 work.
-- Durable global/per-device admission limits are not implemented.
+- Command TTL is enforced at submission, at lease selection, at dispatch, and by
+  the terminal expiration sweep, but expiry is only observed when a scheduler
+  cycle runs, so a device with no connected gateway keeps its expired commands
+  until one does.
 - No history checker, closed-loop fault replay, telemetry pipeline, dashboards,
   release benchmark, or Kubernetes deployment exists.
 - Remote CI has not run against the GitHub remote.
