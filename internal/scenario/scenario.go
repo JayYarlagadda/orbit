@@ -22,11 +22,12 @@ var identifierPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$`)
 type EventType string
 
 const (
-	EventDeviceDisconnect EventType = "device_disconnect"
-	EventDeviceReconnect  EventType = "device_reconnect"
-	EventGatewayCrash     EventType = "gateway_crash"
-	EventGatewayRecover   EventType = "gateway_recover"
-	EventTransportProfile EventType = "transport_profile"
+	EventDeviceDisconnect    EventType = "device_disconnect"
+	EventDeviceReconnect     EventType = "device_reconnect"
+	EventDeviceGatewaySwitch EventType = "device_gateway_switch"
+	EventGatewayCrash        EventType = "gateway_crash"
+	EventGatewayRecover      EventType = "gateway_recover"
+	EventTransportProfile    EventType = "transport_profile"
 )
 
 // Scenario is the canonical in-memory representation of a version 1 scenario.
@@ -189,6 +190,16 @@ func (e Event) validate(path string, gateways, devices map[string]struct{}) erro
 		}
 		if _, exists := devices[e.DeviceID]; !exists {
 			return fmt.Errorf("%s.device_id: unknown device %q", path, e.DeviceID)
+		}
+	case EventDeviceGatewaySwitch:
+		if e.Profile != nil {
+			return fmt.Errorf("%s: device_gateway_switch permits only device_id and gateway_id", path)
+		}
+		if _, exists := devices[e.DeviceID]; !exists {
+			return fmt.Errorf("%s.device_id: unknown device %q", path, e.DeviceID)
+		}
+		if _, exists := gateways[e.GatewayID]; !exists {
+			return fmt.Errorf("%s.gateway_id: unknown gateway %q", path, e.GatewayID)
 		}
 	case EventGatewayCrash, EventGatewayRecover:
 		if e.DeviceID != "" || e.Profile != nil {

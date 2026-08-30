@@ -78,6 +78,59 @@ func TestRunnerOnlineSmoke(t *testing.T) {
 	}
 }
 
+func TestRunnerDualGatewaySession(t *testing.T) {
+	runScenarioIntegrationTest(t, "dual-gateway-session.v1.json", 3*time.Minute)
+}
+
+func TestRunnerGatewayCrashBeforeSend(t *testing.T) {
+	runScenarioIntegrationTest(t, "gateway-crash-before-send.v1.json", 3*time.Minute)
+}
+
+func TestRunnerGatewayCrashAfterSend(t *testing.T) {
+	runScenarioIntegrationTest(t, "gateway-crash-after-send.v1.json", 3*time.Minute)
+}
+
+func runScenarioIntegrationTest(t *testing.T, scenarioFile string, timeout time.Duration) {
+	t.Helper()
+	databaseURL := os.Getenv("ORBIT_TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("ORBIT_TEST_DATABASE_URL is not set")
+	}
+	binDir := t.TempDir()
+	binaries, err := buildScenarioBinaries(binDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scenarioPath := filepath.Join("..", "..", "scenarios", "examples", scenarioFile)
+	runner, err := New(Config{
+		DatabaseURL:  databaseURL,
+		ScenarioPath: scenarioPath,
+		WorkDir:      t.TempDir(),
+		Binaries:     binaries,
+		Timeout:      timeout,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := runner.Run(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Report.Passed {
+		t.Fatalf("history checker failed: %+v", result.Report.Violations)
+	}
+	foundAck := false
+	for _, command := range result.Record.Commands {
+		if command.State == "ACKNOWLEDGED" {
+			foundAck = true
+			break
+		}
+	}
+	if !foundAck {
+		t.Fatal("expected at least one acknowledged command")
+	}
+}
+
 func buildScenarioBinaries(dir string) (Binaries, error) {
 	orbitd, err := buildBinary(dir, "github.com/JayYarlagadda/orbit/cmd/orbitd", "orbitd")
 	if err != nil {

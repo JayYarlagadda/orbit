@@ -43,10 +43,13 @@ type CommandSnapshot struct {
 }
 
 type DeliveryAttempt struct {
-	CommandID  string `json:"command_id"`
-	LeaseToken int64  `json:"lease_token"`
-	Outcome    string `json:"outcome"`
-	Reason     string `json:"reason"`
+	CommandID    string    `json:"command_id"`
+	DeviceID     string    `json:"device_id"`
+	LeaseToken   int64     `json:"lease_token"`
+	SessionEpoch int64     `json:"session_epoch"`
+	StartedAt    time.Time `json:"started_at"`
+	Outcome      string    `json:"outcome"`
+	Reason       string    `json:"reason"`
 }
 
 type ClientApplication struct {
@@ -126,16 +129,27 @@ func Collect(ctx context.Context, pool *pgxpool.Pool, base Record) (Record, erro
 	}
 
 	attemptRows, err := pool.Query(ctx, `
-		SELECT command_id::text, lease_token, outcome::text, COALESCE(reason, '')
-		FROM orbit.delivery_attempts
-		ORDER BY started_at, id`)
+		SELECT attempts.command_id::text, commands.device_id, attempts.lease_token,
+		       attempts.session_epoch, attempts.started_at,
+		       attempts.outcome::text, COALESCE(attempts.reason, '')
+		FROM orbit.delivery_attempts attempts
+		JOIN orbit.commands commands ON commands.id = attempts.command_id
+		ORDER BY attempts.started_at, attempts.id`)
 	if err != nil {
 		return Record{}, fmt.Errorf("query delivery attempts: %w", err)
 	}
 	defer attemptRows.Close()
 	for attemptRows.Next() {
 		var item DeliveryAttempt
-		if err := attemptRows.Scan(&item.CommandID, &item.LeaseToken, &item.Outcome, &item.Reason); err != nil {
+		if err := attemptRows.Scan(
+			&item.CommandID,
+			&item.DeviceID,
+			&item.LeaseToken,
+			&item.SessionEpoch,
+			&item.StartedAt,
+			&item.Outcome,
+			&item.Reason,
+		); err != nil {
 			return Record{}, fmt.Errorf("scan delivery attempt: %w", err)
 		}
 		record.Attempts = append(record.Attempts, item)

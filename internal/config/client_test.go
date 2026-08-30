@@ -54,6 +54,20 @@ func TestLoadClientAppliesDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadClientGatewayAddresses(t *testing.T) {
+	got, err := LoadClient(lookupFrom(map[string]string{
+		"ORBIT_DEVICE_ID":                "edge-1",
+		"ORBIT_CLIENT_GATEWAY_ADDRESSES": "127.0.0.1:50052,127.0.0.1:50053",
+		"ORBIT_CLIENT_GATEWAY_INDEX":     "1",
+	}))
+	if err != nil {
+		t.Fatalf("LoadClient() error = %v", err)
+	}
+	if len(got.GatewayAddresses) != 2 || got.GatewayAddress != "127.0.0.1:50052" || got.GatewayIndex != 1 {
+		t.Fatalf("LoadClient() = %+v", got)
+	}
+}
+
 func TestLoadClientRejectsInvalidConfiguration(t *testing.T) {
 	for _, values := range []map[string]string{
 		{},
@@ -74,6 +88,8 @@ func TestLoadClientRejectsInvalidConfiguration(t *testing.T) {
 			"ORBIT_CLIENT_RECONNECT_INITIAL_DELAY": "5s",
 			"ORBIT_CLIENT_RECONNECT_MAX_DELAY":     "500ms",
 		},
+		{"ORBIT_DEVICE_ID": "edge-1", "ORBIT_CLIENT_GATEWAY_ADDRESSES": " , "},
+		{"ORBIT_DEVICE_ID": "edge-1", "ORBIT_CLIENT_GATEWAY_ADDRESSES": "127.0.0.1:1", "ORBIT_CLIENT_GATEWAY_INDEX": "2"},
 	} {
 		if _, err := LoadClient(lookupFrom(values)); err == nil {
 			t.Fatalf("LoadClient(%v) unexpectedly succeeded", values)

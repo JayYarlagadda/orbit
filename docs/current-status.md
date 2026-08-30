@@ -15,7 +15,8 @@ this file records what actually exists and what has been verified.
 | M2 first delivery | Complete locally | Producer to device to durable `ACKNOWLEDGED` across separate `orbitd`, gateway, and client processes |
 | M3 recovery | Complete locally | Retry/backoff, dead letter, admission limits, gateway-control reconnect, lease/TTL recovery, `orbitd` graceful shutdown test, and online smoke with mid-run `orbitd` restart (CI + `scripts/smoke-online.ps1`) |
 | M4 replay | Complete locally | SplitMix64 schedule compiler, gateway logical fault injection, scenario runner, history collector/checker, golden schedule fixture, and online-smoke closed-loop run |
-| M5-M7 | Not started | No dual-gateway failover runner, telemetry stack, benchmark results, or release evidence |
+| M5 failover | Complete locally | Dual-gateway deployment, client gateway selection/failover, gateway-crash scenario playbooks, INV-05/INV-08 history checks, and failure artifacts |
+| M6-M7 | Not started | No telemetry stack, benchmark results, or release evidence |
 
 ## Implemented
 
@@ -26,8 +27,10 @@ this file records what actually exists and what has been verified.
   between Go (`internal/scenario/schedule.go`) and the C++ fault engine.
 - Gateway logical transport fault injection driven by compiled schedules.
 - Go scenario runner (`internal/scenariorunner`) and `scenario-run` CLI that
-  apply lifecycle events, collect PostgreSQL audit history, and run the
-  invariant checker.
+  deploy multiple gateways, apply lifecycle events, collect PostgreSQL audit
+  history, run the invariant checker, and write failure artifacts.
+- Client gateway failover via ordered `ORBIT_CLIENT_GATEWAY_ADDRESSES` with
+  round-robin reconnect and scenario-driven `device_gateway_switch` events.
 - Pinned Windows bootstrap for Go, CMake, Protobuf, generators, GCC, and Ninja.
 - Protobuf contracts for command, device, and gateway-control services with
   committed generated Go bindings and drift verification.
@@ -129,23 +132,20 @@ leaving the container in a restart loop; the mount is now `/var/lib/postgresql`.
 
 ## Current boundary
 
-M4 replay is closed in code and CI: compiled schedules drive gateway logical
-fault injection, the scenario runner executes real `orbitd`/gateway/client
-processes against PostgreSQL, and the history checker validates core invariants
-on captured audit and client-application events. The C++ engine shares golden
-schedule output with Go.
+M5 failover is closed in code and CI: the scenario runner deploys every gateway
+in a scenario topology, the client rotates through gateway addresses on reconnect,
+and dual-gateway plus gateway-crash playbooks pass the expanded history checker.
 
-The next implementation unit is **M5 failover**: dual-gateway deployment,
-client gateway selection, and closed-loop replay of gateway-crash scenarios with
-expanded invariant coverage.
+The next implementation unit is **M6 observability**: metrics, traces, dashboards,
+and failure-triage evidence.
 
 No performance, scale, or release benchmark claim is justified yet.
 
 ## Open work
 
-- Start **M5**: two gateways, client failover, and dual-gateway scenario playbooks.
-- Extend checker coverage for remaining invariants (INV-04 through INV-08, INV-10–INV-12).
-- Extend Compose beyond PostgreSQL after failover replay is proven.
+- Start **M6**: Prometheus metrics, OpenTelemetry traces, and Grafana dashboards.
+- Extend checker coverage for remaining invariants (INV-04, INV-06, INV-07, INV-10–INV-12).
+- Extend Compose beyond PostgreSQL after observability wiring lands.
 
 ## Known limitations
 
@@ -154,8 +154,7 @@ No performance, scale, or release benchmark claim is justified yet.
   the terminal expiration sweep, but expiry is only observed when a scheduler
   cycle runs, so a device with no connected gateway keeps its expired commands
   until one does.
-- No dual-gateway failover, telemetry pipeline, dashboards, release benchmark, or
-  Kubernetes deployment exists.
+- No telemetry pipeline, dashboards, release benchmark, or Kubernetes deployment exists.
 - Remote CI should be confirmed green on GitHub after the latest push.
 
 ## Safe resume sequence

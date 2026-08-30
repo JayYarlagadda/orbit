@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -110,14 +111,19 @@ func (r *Runner) Run(ctx context.Context) (Result, error) {
 	}
 
 	deviceID := document.Topology.Devices[0]
-	gatewayID := document.Topology.Gateways[0]
 	controlAddress, err := reserveAddress()
 	if err != nil {
 		return Result{}, err
 	}
-	gatewayAddress, err := reserveAddress()
-	if err != nil {
-		return Result{}, err
+	gatewayAddresses := make(map[string]string, len(document.Topology.Gateways))
+	orderedGatewayAddresses := make([]string, 0, len(document.Topology.Gateways))
+	for _, gatewayID := range document.Topology.Gateways {
+		address, err := reserveAddress()
+		if err != nil {
+			return Result{}, err
+		}
+		gatewayAddresses[gatewayID] = address
+		orderedGatewayAddresses = append(orderedGatewayAddresses, address)
 	}
 	statePath := filepath.Join(r.config.WorkDir, "client-state.json")
 	clientLogPath := filepath.Join(r.config.WorkDir, "client.out.log")
@@ -128,11 +134,11 @@ func (r *Runner) Run(ctx context.Context) (Result, error) {
 
 	commonEnv := []string{
 		"ORBIT_DATABASE_URL=" + r.config.DatabaseURL,
-		"ORBIT_GATEWAY_ID=" + gatewayID,
 		"ORBIT_CONTROL_ADDRESS=" + controlAddress,
-		"ORBIT_GATEWAY_LISTEN_ADDRESS=" + gatewayAddress,
 		"ORBIT_DEVICE_ID=" + deviceID,
-		"ORBIT_CLIENT_GATEWAY_ADDRESS=" + gatewayAddress,
+		"ORBIT_CLIENT_GATEWAY_ADDRESSES=" + strings.Join(orderedGatewayAddresses, ","),
+		"ORBIT_CLIENT_GATEWAY_ADDRESS=" + orderedGatewayAddresses[0],
+		"ORBIT_CLIENT_GATEWAY_INDEX=0",
 		"ORBIT_CLIENT_STATE_PATH=" + statePath,
 		"ORBIT_CLIENT_MAX_RECONNECT_ATTEMPTS=5",
 		"ORBIT_GATEWAY_MAX_RECONNECT_ATTEMPTS=0",
@@ -150,11 +156,17 @@ func (r *Runner) Run(ctx context.Context) (Result, error) {
 	if err := waitHealthy(ctx, controlAddress, 20*time.Second); err != nil {
 		return Result{}, err
 	}
-	if err := processes.start("gateway", r.config.Binaries.Gateway, commonEnv, r.config.WorkDir); err != nil {
-		return Result{}, err
-	}
-	if err := waitHealthy(ctx, gatewayAddress, 20*time.Second); err != nil {
-		return Result{}, err
+	for _, gatewayID := range document.Topology.Gateways {
+		gatewayEnv := append(append([]string(nil), commonEnv...),
+			"ORBIT_GATEWAY_ID="+gatewayID,
+			"ORBIT_GATEWAY_LISTEN_ADDRESS="+gatewayAddresses[gatewayID],
+		)
+		if err := processes.start(gatewayID, r.config.Binaries.Gateway, gatewayEnv, r.config.WorkDir); err != nil {
+			return Result{}, err
+		}
+		if err := waitHealthy(ctx, gatewayAddresses[gatewayID], 20*time.Second); err != nil {
+			return Result{}, err
+		}
 	}
 	if err := processes.start("client", r.config.Binaries.Client, commonEnv, r.config.WorkDir); err != nil {
 		return Result{}, err
@@ -174,7 +186,7 @@ func (r *Runner) Run(ctx context.Context) (Result, error) {
 	defer cancel()
 	lifecycleDone := make(chan error, 1)
 	go func() {
-		lifecycleDone <- r.runLifecycle(runCtx, startedAt, schedule, deviceID, gatewayID, processes, &lifecycle)
+		lifecycleDone <- r.runLifecycle(runCtx, startedAt, schedule, document.Topology.Gateways, gatewayAddresses, deviceID, processes, &lifecycle)
 	}()
 
 	playbookErr := r.runPlaybook(runCtx, playbookContext{
@@ -207,7 +219,11 @@ func (r *Runner) Run(ctx context.Context) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	return Result{Record: record, Report: history.Check(record)}, nil
+	report := history.Check(record)
+	if err := writeArtifacts(r.config.WorkDir, record, report); err != nil {
+		return Result{}, err
+	}
+	return Result{Record: record, Report: report}, nil
 }
 
 type playbookContext struct {
@@ -235,8 +251,34 @@ func (r *Runner) runPlaybook(ctx context.Context, playbook playbookContext) erro
 			time.Sleep(500 * time.Millisecond)
 		}
 		return errors.New("offline-reconnect playbook did not reach ACKNOWLEDGED")
+	case "dual-gateway-session":
+		if err := waitPlaybookDelay(ctx, 4*time.Second); err != nil {
+			return err
+		}
+		_, err := submitAndWaitAcknowledged(ctx, r.config.Binaries.Orbitctl, playbook.controlAddress, playbook.deviceID, "dual-gateway-session-1")
+		return err
+	case "gateway-crash-before-send":
+		if err := waitPlaybookDelay(ctx, 3*time.Second); err != nil {
+			return err
+		}
+		_, err := submitAndWaitAcknowledged(ctx, r.config.Binaries.Orbitctl, playbook.controlAddress, playbook.deviceID, "gateway-crash-before-send-1")
+		return err
+	case "gateway-crash-after-send":
+		_, err := submitAndWaitAcknowledged(ctx, r.config.Binaries.Orbitctl, playbook.controlAddress, playbook.deviceID, "gateway-crash-after-send-1")
+		return err
 	default:
 		return fmt.Errorf("unsupported scenario playbook %q", playbook.document.Name)
+	}
+}
+
+func waitPlaybookDelay(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
 	}
 }
 
@@ -244,8 +286,9 @@ func (r *Runner) runLifecycle(
 	ctx context.Context,
 	startedAt time.Time,
 	schedule scenario.Schedule,
+	topologyGateways []string,
+	gatewayAddresses map[string]string,
 	deviceID string,
-	gatewayID string,
 	processes *processGroup,
 	lifecycle *[]history.LifecycleEvent,
 ) error {
@@ -282,17 +325,35 @@ func (r *Runner) runLifecycle(
 			*lifecycle = append(*lifecycle, history.LifecycleEvent{
 				AtMS: event.AtMS, Component: "client", Action: "started", Detail: event.DeviceID,
 			})
+		case "device_gateway_switch":
+			processes.stop("client")
+			address, ok := gatewayAddresses[event.GatewayID]
+			if !ok {
+				return fmt.Errorf("unknown gateway %q", event.GatewayID)
+			}
+			index, err := gatewayIndex(topologyGateways, event.GatewayID)
+			if err != nil {
+				return err
+			}
+			env := setEnvVar(processes.envFor("client"), "ORBIT_CLIENT_GATEWAY_ADDRESS", address)
+			env = setEnvVar(env, "ORBIT_CLIENT_GATEWAY_INDEX", strconv.Itoa(index))
+			if err := processes.start("client", r.config.Binaries.Client, env, r.config.WorkDir); err != nil {
+				return err
+			}
+			*lifecycle = append(*lifecycle, history.LifecycleEvent{
+				AtMS: event.AtMS, Component: "client", Action: "gateway_switch", Detail: event.GatewayID,
+			})
 		case "gateway_crash":
-			processes.stop("gateway")
+			processes.stop(event.GatewayID)
 			*lifecycle = append(*lifecycle, history.LifecycleEvent{
 				AtMS: event.AtMS, Component: "gateway", Action: "stopped", Detail: event.GatewayID,
 			})
 		case "gateway_recover":
-			if processes.running("gateway") {
+			if processes.running(event.GatewayID) {
 				continue
 			}
-			env := processes.envFor("gateway")
-			if err := processes.start("gateway", r.config.Binaries.Gateway, env, r.config.WorkDir); err != nil {
+			env := processes.envFor(event.GatewayID)
+			if err := processes.start(event.GatewayID, r.config.Binaries.Gateway, env, r.config.WorkDir); err != nil {
 				return err
 			}
 			if err := waitHealthy(ctx, envListenAddress(env), 20*time.Second); err != nil {
@@ -425,4 +486,45 @@ func waitForFile(ctx context.Context, path string, timeout time.Duration) error 
 		time.Sleep(100 * time.Millisecond)
 	}
 	return fmt.Errorf("file %s was not created within %s", path, timeout)
+}
+
+func setEnvVar(env []string, key, value string) []string {
+	prefix := key + "="
+	for index, item := range env {
+		if strings.HasPrefix(item, prefix) {
+			env[index] = prefix + value
+			return env
+		}
+	}
+	return append(env, prefix+value)
+}
+
+func gatewayIndex(topology []string, gatewayID string) (int, error) {
+	for index, candidate := range topology {
+		if candidate == gatewayID {
+			return index, nil
+		}
+	}
+	return 0, fmt.Errorf("unknown gateway %q", gatewayID)
+}
+
+func writeArtifacts(workDir string, record history.Record, report history.Report) error {
+	if workDir == "" {
+		return nil
+	}
+	historyBytes, err := json.MarshalIndent(record, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode history artifact: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(workDir, "history.json"), historyBytes, 0o600); err != nil {
+		return fmt.Errorf("write history artifact: %w", err)
+	}
+	reportBytes, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode checker artifact: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(workDir, "checker-report.json"), reportBytes, 0o600); err != nil {
+		return fmt.Errorf("write checker artifact: %w", err)
+	}
+	return nil
 }

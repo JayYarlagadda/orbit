@@ -97,7 +97,7 @@ jobs:
       - name: Run process-level online smoke tests
         run: go test -race -count=1 -timeout 5m ./internal/processtest/...
       - name: Run scenario runner integration tests
-        run: go test -race -count=1 -timeout 5m ./internal/scenariorunner/...
+        run: go test -race -count=1 -timeout 10m ./internal/scenariorunner/...
 
   repository:
     name: Repository contracts
@@ -119,6 +119,9 @@ jobs:
         run: |
           go run ./cmd/scenario-check ./scenarios/examples/offline-reconnect.v1.json
           go run ./cmd/scenario-check ./scenarios/examples/online-smoke.v1.json
+          go run ./cmd/scenario-check ./scenarios/examples/dual-gateway-session.v1.json
+          go run ./cmd/scenario-check ./scenarios/examples/gateway-crash-before-send.v1.json
+          go run ./cmd/scenario-check ./scenarios/examples/gateway-crash-after-send.v1.json
           go test ./internal/scenario -run TestCompileScheduleMatchesGoldenFixture -count=1
           if go run ./cmd/scenario-check ./scenarios/invalid/unknown-device.v1.json; then
             echo "::error::the invalid scenario fixture was accepted" >&2

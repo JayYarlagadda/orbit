@@ -100,7 +100,9 @@ The reference client process reads its own bounded configuration:
 |---|---|---|
 | `ORBIT_DEVICE_ID` | none | Required 1-64 byte identifier |
 | `ORBIT_CLIENT_INSTANCE_ID` | generated | Optional 1-64 byte identifier |
-| `ORBIT_CLIENT_GATEWAY_ADDRESS` | `127.0.0.1:50052` | Non-empty gateway address |
+| `ORBIT_CLIENT_GATEWAY_ADDRESS` | `127.0.0.1:50052` | Primary gateway address |
+| `ORBIT_CLIENT_GATEWAY_ADDRESSES` | none | Comma-separated ordered gateway addresses for failover |
+| `ORBIT_CLIENT_GATEWAY_INDEX` | `0` | Starting index into `ORBIT_CLIENT_GATEWAY_ADDRESSES` |
 | `ORBIT_CLIENT_STATE_PATH` | `data/orbit-client-state.json` | Non-empty durable state path |
 | `ORBIT_CLIENT_DEDUP_RETENTION` | `1024` | 1 through 100,000 retained command IDs |
 | `ORBIT_CLIENT_MAX_RECONNECT_ATTEMPTS` | `0` | 0 through 1,000; 0 retries while the process runs |

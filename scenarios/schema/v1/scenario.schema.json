@@ -122,9 +122,10 @@
       "properties": {
         "at_ms": { "type": "integer", "minimum": 0 },
         "type": {
-          "enum": ["device_disconnect", "device_reconnect"]
+          "enum": ["device_disconnect", "device_reconnect", "device_gateway_switch"]
         },
-        "device_id": { "$ref": "#/$defs/identifier" }
+        "device_id": { "$ref": "#/$defs/identifier" },
+        "gateway_id": { "$ref": "#/$defs/identifier" }
       }
     },
     "gatewayEvent": {

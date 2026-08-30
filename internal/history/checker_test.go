@@ -1,6 +1,9 @@
 package history
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestCheckerDetectsCorruptedHistories(t *testing.T) {
 	passing := Record{
@@ -36,5 +39,35 @@ func TestCheckerDetectsCorruptedHistories(t *testing.T) {
 	})
 	if report := Check(doubleApply); report.Passed {
 		t.Fatal("expected INV-02 violation")
+	}
+
+	leaseRegression := passing
+	leaseRegression.AuditEvents = []AuditEvent{
+		{CommandID: "cmd-1", NewState: "LEASED", LeaseToken: 2},
+		{CommandID: "cmd-1", OldState: "LEASED", NewState: "IN_FLIGHT", LeaseToken: 1},
+	}
+	if report := Check(leaseRegression); report.Passed || report.Violations[0].Invariant != InvFencingMonotonicity {
+		t.Fatalf("expected INV-05 violation, got %+v", report)
+	}
+
+	staleSession := passing
+	now := time.Now()
+	staleSession.Attempts = []DeliveryAttempt{
+		{CommandID: "cmd-1", DeviceID: "device-a", SessionEpoch: 2, Outcome: "ACKNOWLEDGED", StartedAt: now},
+		{CommandID: "cmd-1", DeviceID: "device-a", SessionEpoch: 1, Outcome: "ACKNOWLEDGED", StartedAt: now.Add(time.Second)},
+	}
+	report := Check(staleSession)
+	if report.Passed {
+		t.Fatalf("expected INV-08 violation, got %+v", report)
+	}
+	foundINV08 := false
+	for _, violation := range report.Violations {
+		if violation.Invariant == InvSingleActiveSession {
+			foundINV08 = true
+			break
+		}
+	}
+	if !foundINV08 {
+		t.Fatalf("expected INV-08 violation, got %+v", report.Violations)
 	}
 }

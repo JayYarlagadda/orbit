@@ -53,37 +53,43 @@ func run(logger *slog.Logger) error {
 	rootContext, stopSignals := shutdownsignal.NotifyContext(context.Background())
 	defer stopSignals()
 
-	connection, err := grpc.NewClient(
-		settings.GatewayAddress,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultCallOptions(
-			grpc.MaxCallRecvMsgSize(maxGRPCMessageBytes),
-			grpc.MaxCallSendMsgSize(maxGRPCMessageBytes),
-		),
-	)
-	if err != nil {
-		return err
-	}
-	defer connection.Close()
-
-	deviceClient := orbitv1.NewDeviceServiceClient(connection)
 	handler := &applyHandler{logger: logger}
-	logger.Info("client starting",
-		"device_id", settings.DeviceID,
-		"client_instance_id", instanceID,
-		"gateway_address", settings.GatewayAddress,
-		"state_path", settings.StatePath,
-	)
-
 	policy, err := backoff.New(settings.ReconnectInitialDelay, settings.ReconnectMaxDelay)
 	if err != nil {
 		return err
 	}
+
+	gatewayIndex := settings.GatewayIndex
 	for {
+		address := settings.GatewayAddress
+		if len(settings.GatewayAddresses) > 0 {
+			address = settings.GatewayAddresses[gatewayIndex]
+		}
+
+		connection, err := grpc.NewClient(
+			address,
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithDefaultCallOptions(
+				grpc.MaxCallRecvMsgSize(maxGRPCMessageBytes),
+				grpc.MaxCallSendMsgSize(maxGRPCMessageBytes),
+			),
+		)
+		if err != nil {
+			return err
+		}
+
+		logger.Info("client starting",
+			"device_id", settings.DeviceID,
+			"client_instance_id", instanceID,
+			"gateway_address", address,
+			"gateway_index", gatewayIndex,
+			"state_path", settings.StatePath,
+		)
+
 		startedAt := time.Now()
 		sessionErr := client.RunSession(
 			rootContext,
-			deviceClient,
+			orbitv1.NewDeviceServiceClient(connection),
 			client.SessionConfig{
 				DeviceID:         settings.DeviceID,
 				ClientInstanceID: instanceID,
@@ -95,6 +101,8 @@ func run(logger *slog.Logger) error {
 			state,
 			handler,
 		)
+		_ = connection.Close()
+
 		if rootContext.Err() != nil {
 			logger.Info("client stopping", "last_seen_sequence", state.LastSeenSequence())
 			return nil
@@ -118,8 +126,16 @@ func run(logger *slog.Logger) error {
 			)
 		}
 
+		if len(settings.GatewayAddresses) > 1 {
+			gatewayIndex = (gatewayIndex + 1) % len(settings.GatewayAddresses)
+		}
+
 		wait := policy.Next()
-		logger.Info("reconnecting", "attempt", policy.Attempts(), "delay", wait.String())
+		logger.Info("reconnecting",
+			"attempt", policy.Attempts(),
+			"delay", wait.String(),
+			"gateway_index", gatewayIndex,
+		)
 		if err := backoff.Wait(rootContext, wait); err != nil {
 			logger.Info("client stopping", "last_seen_sequence", state.LastSeenSequence())
 			return nil

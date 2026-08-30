@@ -22,6 +22,8 @@ type Client struct {
 	DeviceID              string
 	ClientInstanceID      string
 	GatewayAddress        string
+	GatewayAddresses      []string
+	GatewayIndex          int
 	StatePath             string
 	DedupRetention        int
 	ReconnectInitialDelay time.Duration
@@ -76,6 +78,20 @@ func LoadClient(lookup LookupEnv) (Client, error) {
 		}
 	}
 
+	if value, ok := lookup("ORBIT_CLIENT_GATEWAY_ADDRESSES"); ok {
+		addresses, err := parseGatewayAddresses(value)
+		if err != nil {
+			return Client{}, err
+		}
+		result.GatewayAddresses = addresses
+	}
+	if len(result.GatewayAddresses) == 0 && result.GatewayAddress != "" {
+		result.GatewayAddresses = []string{result.GatewayAddress}
+	}
+	if len(result.GatewayAddresses) > 0 && result.GatewayAddress == defaultClientGatewayAddress {
+		result.GatewayAddress = result.GatewayAddresses[0]
+	}
+
 	integerSettings := []struct {
 		key     string
 		target  *int
@@ -84,6 +100,7 @@ func LoadClient(lookup LookupEnv) (Client, error) {
 	}{
 		{key: "ORBIT_CLIENT_DEDUP_RETENTION", target: &result.DedupRetention, minimum: 1, maximum: 100_000},
 		{key: "ORBIT_CLIENT_MAX_RECONNECT_ATTEMPTS", target: &result.MaxReconnectAttempts, minimum: 0, maximum: 1000},
+		{key: "ORBIT_CLIENT_GATEWAY_INDEX", target: &result.GatewayIndex, minimum: 0, maximum: 16},
 	}
 	for _, setting := range integerSettings {
 		if value, ok := lookup(setting.key); ok {
@@ -116,6 +133,9 @@ func LoadClient(lookup LookupEnv) (Client, error) {
 	if result.ReconnectMaxDelay < result.ReconnectInitialDelay {
 		return Client{}, fmt.Errorf("ORBIT_CLIENT_RECONNECT_MAX_DELAY must not be below ORBIT_CLIENT_RECONNECT_INITIAL_DELAY")
 	}
+	if len(result.GatewayAddresses) > 0 && result.GatewayIndex >= len(result.GatewayAddresses) {
+		return Client{}, fmt.Errorf("ORBIT_CLIENT_GATEWAY_INDEX must be below the number of gateway addresses (%d)", len(result.GatewayAddresses))
+	}
 	if err := applyHeartbeatSettings(
 		lookup,
 		"ORBIT_CLIENT_HEARTBEAT_INTERVAL",
@@ -126,4 +146,20 @@ func LoadClient(lookup LookupEnv) (Client, error) {
 		return Client{}, err
 	}
 	return result, nil
+}
+
+func parseGatewayAddresses(value string) ([]string, error) {
+	parts := strings.Split(value, ",")
+	addresses := make([]string, 0, len(parts))
+	for index, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			return nil, fmt.Errorf("ORBIT_CLIENT_GATEWAY_ADDRESSES[%d] must not be empty", index)
+		}
+		addresses = append(addresses, part)
+	}
+	if len(addresses) == 0 {
+		return nil, fmt.Errorf("ORBIT_CLIENT_GATEWAY_ADDRESSES must contain at least one address")
+	}
+	return addresses, nil
 }

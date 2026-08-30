@@ -9,6 +9,8 @@ const (
 	InvAcknowledgedTerminal = "INV-01"
 	InvOneApplication       = "INV-02"
 	InvDeviceOrder          = "INV-03"
+	InvFencingMonotonicity  = "INV-05"
+	InvSingleActiveSession  = "INV-08"
 	InvTerminalUnblocks     = "INV-09"
 )
 
@@ -28,6 +30,8 @@ func Check(record Record) Report {
 	violations = append(violations, checkAcknowledgedTerminal(record)...)
 	violations = append(violations, checkOneApplication(record)...)
 	violations = append(violations, checkDeviceOrder(record)...)
+	violations = append(violations, checkFencingMonotonicity(record)...)
+	violations = append(violations, checkSingleActiveSession(record)...)
 	violations = append(violations, checkTerminalUnblocks(record)...)
 	return Report{
 		Passed:     len(violations) == 0,
@@ -96,6 +100,98 @@ func checkDeviceOrder(record Record) []Violation {
 					),
 				}}
 			}
+		}
+	}
+	return nil
+}
+
+func checkFencingMonotonicity(record Record) []Violation {
+	byCommand := make(map[string][]AuditEvent)
+	for _, event := range record.AuditEvents {
+		if event.LeaseToken > 0 {
+			byCommand[event.CommandID] = append(byCommand[event.CommandID], event)
+		}
+	}
+	for commandID, events := range byCommand {
+		sort.Slice(events, func(i, j int) bool {
+			return events[i].OccurredAt.Before(events[j].OccurredAt)
+		})
+		var previous int64
+		for index, event := range events {
+			if index > 0 && event.LeaseToken < previous {
+				return []Violation{{
+					Invariant: InvFencingMonotonicity,
+					Message: fmt.Sprintf(
+						"command %s lease token regressed from %d to %d",
+						commandID,
+						previous,
+						event.LeaseToken,
+					),
+					Position: index,
+				}}
+			}
+			previous = event.LeaseToken
+		}
+	}
+
+	byDevice := make(map[string][]DeliveryAttempt)
+	for _, attempt := range record.Attempts {
+		byDevice[attempt.DeviceID] = append(byDevice[attempt.DeviceID], attempt)
+	}
+	for deviceID, attempts := range byDevice {
+		sort.Slice(attempts, func(i, j int) bool {
+			if attempts[i].StartedAt.Equal(attempts[j].StartedAt) {
+				return attempts[i].SessionEpoch < attempts[j].SessionEpoch
+			}
+			return attempts[i].StartedAt.Before(attempts[j].StartedAt)
+		})
+		var previous int64
+		for index, attempt := range attempts {
+			if index > 0 && attempt.SessionEpoch < previous {
+				return []Violation{{
+					Invariant: InvFencingMonotonicity,
+					Message: fmt.Sprintf(
+						"device %s session epoch regressed from %d to %d",
+						deviceID,
+						previous,
+						attempt.SessionEpoch,
+					),
+					Position: index,
+				}}
+			}
+			previous = attempt.SessionEpoch
+		}
+	}
+	return nil
+}
+
+func checkSingleActiveSession(record Record) []Violation {
+	byDevice := make(map[string][]DeliveryAttempt)
+	for _, attempt := range record.Attempts {
+		if attempt.Outcome != "ACKNOWLEDGED" {
+			continue
+		}
+		byDevice[attempt.DeviceID] = append(byDevice[attempt.DeviceID], attempt)
+	}
+	for deviceID, attempts := range byDevice {
+		sort.Slice(attempts, func(i, j int) bool {
+			return attempts[i].StartedAt.Before(attempts[j].StartedAt)
+		})
+		var previous int64
+		for index, attempt := range attempts {
+			if index > 0 && attempt.SessionEpoch < previous {
+				return []Violation{{
+					Invariant: InvSingleActiveSession,
+					Message: fmt.Sprintf(
+						"device %s acknowledged under stale session epoch %d after epoch %d",
+						deviceID,
+						attempt.SessionEpoch,
+						previous,
+					),
+					Position: index,
+				}}
+			}
+			previous = attempt.SessionEpoch
 		}
 	}
 	return nil
