@@ -240,7 +240,7 @@ func (r *Runner) runPlaybook(ctx context.Context, playbook playbookContext) erro
 	case "offline-reconnect":
 		return retrySubmitUntilAcknowledged(ctx, r.config.Timeout, r.config.Binaries.Orbitctl, playbook.controlAddress, playbook.deviceID, "offline-reconnect-1")
 	case "dual-gateway-session":
-		if err := waitPlaybookDelay(ctx, 8*time.Second); err != nil {
+		if err := waitPlaybookDelay(ctx, 5*time.Second); err != nil {
 			return err
 		}
 		return retrySubmitUntilAcknowledged(ctx, r.config.Timeout, r.config.Binaries.Orbitctl, playbook.controlAddress, playbook.deviceID, "dual-gateway-session-1")
