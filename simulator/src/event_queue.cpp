@@ -10,7 +10,9 @@ namespace orbit::simulator {
 std::uint64_t EventQueue::push(
     const std::uint64_t timestamp_ms,
     const EventType type,
-    std::string target) {
+    std::string target,
+    const bool has_profile,
+    NetworkProfile profile) {
   if (next_ordinal_ == std::numeric_limits<std::uint64_t>::max()) {
     throw std::overflow_error("event ordinal exhausted");
   }
@@ -21,6 +23,8 @@ std::uint64_t EventQueue::push(
       .ordinal = ordinal,
       .type = type,
       .target = std::move(target),
+      .has_profile = has_profile,
+      .profile = profile,
   });
   return ordinal;
 }

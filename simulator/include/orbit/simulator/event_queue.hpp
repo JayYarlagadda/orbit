@@ -15,6 +15,18 @@ enum class EventType : std::uint8_t {
   gateway_crash,
   gateway_recover,
   transport_profile,
+  delivery_drop,
+  delivery_duplicate,
+  ack_drop,
+  ack_duplicate,
+};
+
+struct NetworkProfile final {
+  std::uint64_t latency_ms{};
+  std::uint64_t jitter_ms{};
+  double delivery_loss_rate{};
+  double ack_loss_rate{};
+  double duplicate_rate{};
 };
 
 struct Event final {
@@ -22,6 +34,8 @@ struct Event final {
   std::uint64_t ordinal{};
   EventType type{};
   std::string target;
+  bool has_profile{};
+  NetworkProfile profile{};
 
   friend bool operator==(const Event&, const Event&) = default;
 };
@@ -35,7 +49,9 @@ class EventQueue final {
   [[nodiscard]] std::uint64_t push(
       std::uint64_t timestamp_ms,
       EventType type,
-      std::string target);
+      std::string target,
+      bool has_profile = false,
+      NetworkProfile profile = {});
   [[nodiscard]] Event pop();
   [[nodiscard]] const Event& top() const;
   [[nodiscard]] bool empty() const noexcept;

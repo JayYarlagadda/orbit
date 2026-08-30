@@ -94,6 +94,8 @@ jobs:
           go run ./cmd/orbit-migrate -direction up -database-url "$ORBIT_TEST_DATABASE_URL"
       - name: Run PostgreSQL integration tests
         run: go test -race -count=1 ./internal/storage/...
+      - name: Run process-level online smoke tests
+        run: go test -race -count=1 -timeout 5m ./internal/processtest/...
 
   repository:
     name: Repository contracts
@@ -114,6 +116,7 @@ jobs:
       - name: Verify scenario contract
         run: |
           go run ./cmd/scenario-check ./scenarios/examples/offline-reconnect.v1.json
+          go test ./internal/scenario -run TestCompileScheduleMatchesGoldenFixture -count=1
           if go run ./cmd/scenario-check ./scenarios/invalid/unknown-device.v1.json; then
             echo "::error::the invalid scenario fixture was accepted" >&2
             exit 1

@@ -13,8 +13,8 @@ this file records what actually exists and what has been verified.
 | M0 build | Complete locally | Go/C++ build, scenario fixtures, generated-code check, reversible PostgreSQL migration |
 | M1 durable API | Complete locally | Real gRPC submit/get/cancel against PostgreSQL 18.6; race-enabled repository suite |
 | M2 first delivery | Complete locally | Producer to device to durable `ACKNOWLEDGED` across separate `orbitd`, gateway, and client processes |
-| M3 recovery | Complete locally | Capped exponential retry with full jitter, retry-budget dead letter, global/per-device admission limits, gateway-control reconnect, lease-expiry recovery, and terminal TTL expiration |
-| M4 replay | Foundation only | Stable C++ event queue and scenario contract exist; fault engine does not |
+| M3 recovery | Complete locally | Retry/backoff, dead letter, admission limits, gateway-control reconnect, lease/TTL recovery, `orbitd` graceful shutdown test, and online smoke with mid-run `orbitd` restart (CI + `scripts/smoke-online.ps1`) |
+| M4 replay | In progress | SplitMix64 PRNG, scenario schedule compiler in Go and C++, golden schedule fixture; scenario runner and history checker do not |
 | M5-M7 | Not started | No failover runner, telemetry stack, benchmark results, or release evidence |
 
 ## Implemented
@@ -22,6 +22,8 @@ this file records what actually exists and what has been verified.
 - Versioned scenario JSON contract with strict Go validation and valid/invalid
   fixtures.
 - C++20 deterministic event queue ordered by timestamp then insertion ordinal.
+- SplitMix64 PRNG (`splitmix64-v1`) and a canonical schedule compiler shared
+  between Go (`internal/scenario/schedule.go`) and the C++ fault engine.
 - Pinned Windows bootstrap for Go, CMake, Protobuf, generators, GCC, and Ninja.
 - Protobuf contracts for command, device, and gateway-control services with
   committed generated Go bindings and drift verification.
@@ -89,9 +91,12 @@ The following passed on this workstation:
   within 24 goroutines and 16 MiB heap of the post-warmup snapshot.
 - Built `gateway` and `client` executables interrupted while a control or
   device stream was held open: both became healthy (or persisted session
-  state), then exited 0 within the drain deadline. The tests start the
-  binaries in their own process group so Windows Ctrl+Break does not hit the
-  `go test` parent. `orbitd` shutdown still needs PostgreSQL.
+  state), then exited 0 within the drain deadline.
+- Built `orbitd` executable interrupted against real PostgreSQL: health check
+  passed, then the process exited 0 within the drain deadline.
+- Built `orbitd`, gateway, and client against PostgreSQL: two commands reached
+  durable `ACKNOWLEDGED`, including one submitted after a forced `orbitd`
+  restart while the gateway stayed up.
 - Built gateway plus client receiving the same command twice: two durable ACKs,
   one `applying command` log line, `last_seen_sequence` 1. Built client after
   a dropped ACK reconnecting and acknowledging without a second apply.
@@ -105,6 +110,7 @@ The following passed on this workstation:
   advanced to 1, and an audit chain of
   `QUEUED -> LEASED -> IN_FLIGHT -> ACKNOWLEDGED`. All three processes wrote
   empty standard-error logs.
+- Go schedule compiler golden test for `offline-reconnect.v1.json`.
 
 The PostgreSQL image digest used locally was
 `sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af`.
@@ -119,37 +125,25 @@ leaving the container in a restart loop; the mount is now `/var/lib/postgresql`.
 
 ## Current boundary
 
-The online happy path is proven end to end across separate processes. Gateway
-control reconnect is implemented: the gateway no longer exits when its control
-stream fails, and it drops device sessions so they re-register after `orbitd`
-restarts. `DeviceService.Connect` is covered in-process: assignment and ACK
-forwarding, hello rejection, rebind teardown without leaking `DeviceOffline`
-onto the next control stream, and a bounded connect/disconnect goroutine check.
-A reconnect soak covers control-stream churn with concurrent device connects.
-Built `gateway` and `client` executables now drain and exit after an interrupt
-(Ctrl+Break on Windows, SIGTERM elsewhere) against holding stubs, so shutdown
-is not tested through `go run`. Duplicate delivery is proven across separate
-`gateway` and `client` processes: two assignments yield two ACKs with the same
-result hash and one handler invocation. A lost ACK followed by reconnect
-replays the command without a second apply. Heartbeat frames keep the control,
-gateway device, and client streams alive with a bounded silence timeout. M3
-recovery policies are in place: lease expiry schedules capped exponential retry
-with full jitter, exhausted retry budgets dead-letter commands, and submit
-admission limits return `ResourceExhausted` when durable queues are full. The
-next implementation unit is confirming the mid-run `orbitd` restart in
-`scripts/smoke-online.ps1` against real PostgreSQL.
+M3 recovery is closed in code and CI: retry, dead letter, admission, reconnect,
+lease/TTL recovery, `orbitd` shutdown, and the online smoke path with an
+`orbitd` restart are all covered by automated tests when PostgreSQL is
+available. M4 has started: the Go and C++ compilers emit the same canonical
+schedule for the `offline-reconnect` golden fixture, and the C++ engine expands
+logical transport faults from the scenario network profile using `splitmix64-v1`.
 
-Only in-process reconnect, device-stream, and soak checks have been added on
-top of the online path. No performance, scale, failover, or complete
-at-least-once claim is justified yet, and the README contains no benchmark
-numbers.
+The next implementation unit is the Go scenario runner that applies compiled
+schedules to real Orbit processes and records a normalized history for the
+invariant checker.
 
-## Open Phase 2 work
+No performance, scale, failover, or complete at-least-once claim is justified
+yet, and the README contains no benchmark numbers.
 
-- Confirm `scripts/smoke-online.ps1` still reaches `ACKNOWLEDGED` after the
-  mid-run `orbitd` restart against real PostgreSQL.
-- Extend Compose beyond PostgreSQL after the process path is proven. The
-  PostgreSQL service itself now starts and reports healthy.
+## Open work
+
+- Wire the C++ schedule compiler output into the scenario runner (M4).
+- Implement the history checker against `verification-and-benchmarks.md` (M4/M5).
+- Extend Compose beyond PostgreSQL after the closed-loop replay path is proven.
 
 ## Known limitations
 
@@ -158,18 +152,16 @@ numbers.
   the terminal expiration sweep, but expiry is only observed when a scheduler
   cycle runs, so a device with no connected gateway keeps its expired commands
   until one does.
-- No history checker, closed-loop fault replay, telemetry pipeline, dashboards,
-  release benchmark, or Kubernetes deployment exists.
-- Remote CI has not run against the GitHub remote.
+- No history checker, closed-loop fault replay against live services, telemetry
+  pipeline, dashboards, release benchmark, or Kubernetes deployment exists.
+- Remote CI should be confirmed green on GitHub after the latest push.
 
 ## Safe resume sequence
 
 1. Run `scripts/verify.ps1`.
-2. Start or verify PostgreSQL 18.6 and run the race-enabled storage suite with
-   `ORBIT_TEST_DATABASE_URL`.
-3. Start the Compose PostgreSQL service and run `scripts/smoke-online.ps1` to
-   confirm the online path still reaches durable `ACKNOWLEDGED` after an
-   `orbitd` restart.
-4. Run `scripts/smoke-online.ps1` against PostgreSQL to confirm `ACKNOWLEDGED`
-   after an `orbitd` restart.
-5. Update this ledger and the invariant evidence table with the result.
+2. Start or verify PostgreSQL 18.6 and run the race-enabled storage and
+   processtest suites with `ORBIT_TEST_DATABASE_URL`.
+3. Run `scripts/smoke-online.ps1` when validating the full Windows process path.
+4. Build the C++ simulator (`cmake --preset default && ctest --preset default`)
+   and confirm the golden schedule test passes.
+5. Implement the Go scenario runner that consumes compiled schedules.

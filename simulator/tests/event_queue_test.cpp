@@ -55,7 +55,7 @@ void rejects_empty_access() {
 
 }  // namespace
 
-int main() {
+int run_event_queue_tests() {
   try {
     orders_by_timestamp();
     preserves_insertion_order_for_ties();
