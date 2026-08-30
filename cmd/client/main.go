@@ -14,6 +14,7 @@ import (
 	"github.com/JayYarlagadda/orbit/internal/backoff"
 	"github.com/JayYarlagadda/orbit/internal/client"
 	"github.com/JayYarlagadda/orbit/internal/config"
+	"github.com/JayYarlagadda/orbit/internal/heartbeat"
 	"github.com/JayYarlagadda/orbit/internal/shutdownsignal"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -83,7 +84,14 @@ func run(logger *slog.Logger) error {
 		sessionErr := client.RunSession(
 			rootContext,
 			deviceClient,
-			client.SessionConfig{DeviceID: settings.DeviceID, ClientInstanceID: instanceID},
+			client.SessionConfig{
+				DeviceID:         settings.DeviceID,
+				ClientInstanceID: instanceID,
+				Heartbeat: heartbeat.Settings{
+					Interval: settings.HeartbeatInterval,
+					Timeout:  settings.HeartbeatTimeout,
+				},
+			},
 			state,
 			handler,
 		)

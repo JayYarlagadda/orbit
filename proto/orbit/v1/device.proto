@@ -14,6 +14,7 @@ message DeviceFrame {
   oneof body {
     DeviceHello hello = 1;
     CommandAck ack = 2;
+    Heartbeat heartbeat = 3;
   }
 }
 
@@ -21,8 +22,11 @@ message ServerFrame {
   oneof body {
     SessionOpened session_opened = 1;
     CommandDelivery command = 2;
+    Heartbeat heartbeat = 3;
   }
 }
+
+message Heartbeat {}
 
 message DeviceHello {
   string device_id = 1;

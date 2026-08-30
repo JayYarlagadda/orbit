@@ -11,6 +11,7 @@ import (
 	"time"
 
 	orbitv1 "github.com/JayYarlagadda/orbit/gen/orbit/v1"
+	"github.com/JayYarlagadda/orbit/internal/heartbeat"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
@@ -118,7 +119,7 @@ func TestRunControlStreamFailsHubOnDisconnect(t *testing.T) {
 	defer stop()
 	hub := newTestHub(t, 4)
 
-	err := RunControlStream(context.Background(), client, hub, "instance-1")
+	err := RunControlStream(context.Background(), client, hub, "instance-1", heartbeat.Settings{})
 	if !errors.Is(err, ErrControlDisconnected) {
 		t.Fatalf("RunControlStream() error = %v, want ErrControlDisconnected", err)
 	}

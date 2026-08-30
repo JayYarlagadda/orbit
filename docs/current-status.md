@@ -126,9 +126,10 @@ Built `gateway` and `client` executables now drain and exit after an interrupt
 is not tested through `go run`. Duplicate delivery is proven across separate
 `gateway` and `client` processes: two assignments yield two ACKs with the same
 result hash and one handler invocation. A lost ACK followed by reconnect
-replays the command without a second apply. The next implementation units are
-confirming the mid-run `orbitd` restart in `scripts/smoke-online.ps1` against
-real PostgreSQL, and heartbeat frames.
+replays the command without a second apply. Heartbeat frames keep the control,
+gateway device, and client streams alive with a bounded silence timeout. The
+next implementation unit is confirming the mid-run `orbitd` restart in
+`scripts/smoke-online.ps1` against real PostgreSQL.
 
 Only in-process reconnect, device-stream, and soak checks have been added on
 top of the online path. No performance, scale, failover, or complete
@@ -139,14 +140,12 @@ numbers.
 
 - Confirm `scripts/smoke-online.ps1` still reaches `ACKNOWLEDGED` after the
   mid-run `orbitd` restart against real PostgreSQL.
-- Add heartbeat frames.
 - Extend Compose beyond PostgreSQL after the process path is proven. The
   PostgreSQL service itself now starts and reports healthy.
 
 ## Known limitations
 
 - Local transport is plaintext and there is no producer/device authentication.
-- Gateway-control and device heartbeat messages are not defined yet.
 - Command TTL is enforced at submission, at lease selection, and by the terminal
   expiration sweep, but expiry is only observed when a scheduler cycle runs, so
   a device with no connected gateway keeps its expired commands until one does.
@@ -165,6 +164,6 @@ numbers.
 3. Start the Compose PostgreSQL service and run `scripts/smoke-online.ps1` to
    confirm the online path still reaches durable `ACKNOWLEDGED` after an
    `orbitd` restart.
-4. Add heartbeat frames, or run `scripts/smoke-online.ps1` against PostgreSQL
-   to confirm `ACKNOWLEDGED` after an `orbitd` restart.
+4. Run `scripts/smoke-online.ps1` against PostgreSQL to confirm `ACKNOWLEDGED`
+   after an `orbitd` restart.
 5. Update this ledger and the invariant evidence table with the result.

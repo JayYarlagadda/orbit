@@ -30,6 +30,7 @@ type GatewayFrame struct {
 	//	*GatewayFrame_DeviceOffline
 	//	*GatewayFrame_DeliveryStarted
 	//	*GatewayFrame_CommandAck
+	//	*GatewayFrame_Heartbeat
 	Body          isGatewayFrame_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -117,6 +118,15 @@ func (x *GatewayFrame) GetCommandAck() *GatewayCommandAck {
 	return nil
 }
 
+func (x *GatewayFrame) GetHeartbeat() *Heartbeat {
+	if x != nil {
+		if x, ok := x.Body.(*GatewayFrame_Heartbeat); ok {
+			return x.Heartbeat
+		}
+	}
+	return nil
+}
+
 type isGatewayFrame_Body interface {
 	isGatewayFrame_Body()
 }
@@ -141,6 +151,10 @@ type GatewayFrame_CommandAck struct {
 	CommandAck *GatewayCommandAck `protobuf:"bytes,5,opt,name=command_ack,json=commandAck,proto3,oneof"`
 }
 
+type GatewayFrame_Heartbeat struct {
+	Heartbeat *Heartbeat `protobuf:"bytes,6,opt,name=heartbeat,proto3,oneof"`
+}
+
 func (*GatewayFrame_Hello) isGatewayFrame_Body() {}
 
 func (*GatewayFrame_DeviceOnline) isGatewayFrame_Body() {}
@@ -151,12 +165,15 @@ func (*GatewayFrame_DeliveryStarted) isGatewayFrame_Body() {}
 
 func (*GatewayFrame_CommandAck) isGatewayFrame_Body() {}
 
+func (*GatewayFrame_Heartbeat) isGatewayFrame_Body() {}
+
 type ControlFrame struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Body:
 	//
 	//	*ControlFrame_DeviceSession
 	//	*ControlFrame_CommandAssignment
+	//	*ControlFrame_Heartbeat
 	Body          isControlFrame_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -217,6 +234,15 @@ func (x *ControlFrame) GetCommandAssignment() *GatewayCommandAssignment {
 	return nil
 }
 
+func (x *ControlFrame) GetHeartbeat() *Heartbeat {
+	if x != nil {
+		if x, ok := x.Body.(*ControlFrame_Heartbeat); ok {
+			return x.Heartbeat
+		}
+	}
+	return nil
+}
+
 type isControlFrame_Body interface {
 	isControlFrame_Body()
 }
@@ -229,9 +255,15 @@ type ControlFrame_CommandAssignment struct {
 	CommandAssignment *GatewayCommandAssignment `protobuf:"bytes,2,opt,name=command_assignment,json=commandAssignment,proto3,oneof"`
 }
 
+type ControlFrame_Heartbeat struct {
+	Heartbeat *Heartbeat `protobuf:"bytes,3,opt,name=heartbeat,proto3,oneof"`
+}
+
 func (*ControlFrame_DeviceSession) isControlFrame_Body() {}
 
 func (*ControlFrame_CommandAssignment) isControlFrame_Body() {}
+
+func (*ControlFrame_Heartbeat) isControlFrame_Body() {}
 
 type GatewayHello struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
@@ -633,18 +665,20 @@ var File_orbit_v1_gateway_proto protoreflect.FileDescriptor
 
 const file_orbit_v1_gateway_proto_rawDesc = "" +
 	"\n" +
-	"\x16orbit/v1/gateway.proto\x12\borbit.v1\x1a\x15orbit/v1/device.proto\"\xcf\x02\n" +
+	"\x16orbit/v1/gateway.proto\x12\borbit.v1\x1a\x15orbit/v1/device.proto\"\x84\x03\n" +
 	"\fGatewayFrame\x12.\n" +
 	"\x05hello\x18\x01 \x01(\v2\x16.orbit.v1.GatewayHelloH\x00R\x05hello\x12=\n" +
 	"\rdevice_online\x18\x02 \x01(\v2\x16.orbit.v1.DeviceOnlineH\x00R\fdeviceOnline\x12@\n" +
 	"\x0edevice_offline\x18\x03 \x01(\v2\x17.orbit.v1.DeviceOfflineH\x00R\rdeviceOffline\x12F\n" +
 	"\x10delivery_started\x18\x04 \x01(\v2\x19.orbit.v1.DeliveryStartedH\x00R\x0fdeliveryStarted\x12>\n" +
 	"\vcommand_ack\x18\x05 \x01(\v2\x1b.orbit.v1.GatewayCommandAckH\x00R\n" +
-	"commandAckB\x06\n" +
-	"\x04body\"\xad\x01\n" +
+	"commandAck\x123\n" +
+	"\theartbeat\x18\x06 \x01(\v2\x13.orbit.v1.HeartbeatH\x00R\theartbeatB\x06\n" +
+	"\x04body\"\xe2\x01\n" +
 	"\fControlFrame\x12@\n" +
 	"\x0edevice_session\x18\x01 \x01(\v2\x17.orbit.v1.DeviceSessionH\x00R\rdeviceSession\x12S\n" +
-	"\x12command_assignment\x18\x02 \x01(\v2\".orbit.v1.GatewayCommandAssignmentH\x00R\x11commandAssignmentB\x06\n" +
+	"\x12command_assignment\x18\x02 \x01(\v2\".orbit.v1.GatewayCommandAssignmentH\x00R\x11commandAssignment\x123\n" +
+	"\theartbeat\x18\x03 \x01(\v2\x13.orbit.v1.HeartbeatH\x00R\theartbeatB\x06\n" +
 	"\x04body\"]\n" +
 	"\fGatewayHello\x12\x1d\n" +
 	"\n" +
@@ -700,8 +734,9 @@ var file_orbit_v1_gateway_proto_goTypes = []any{
 	(*GatewayCommandAssignment)(nil), // 6: orbit.v1.GatewayCommandAssignment
 	(*DeliveryStarted)(nil),          // 7: orbit.v1.DeliveryStarted
 	(*GatewayCommandAck)(nil),        // 8: orbit.v1.GatewayCommandAck
-	(*CommandDelivery)(nil),          // 9: orbit.v1.CommandDelivery
-	(*CommandAck)(nil),               // 10: orbit.v1.CommandAck
+	(*Heartbeat)(nil),                // 9: orbit.v1.Heartbeat
+	(*CommandDelivery)(nil),          // 10: orbit.v1.CommandDelivery
+	(*CommandAck)(nil),               // 11: orbit.v1.CommandAck
 }
 var file_orbit_v1_gateway_proto_depIdxs = []int32{
 	2,  // 0: orbit.v1.GatewayFrame.hello:type_name -> orbit.v1.GatewayHello
@@ -709,17 +744,19 @@ var file_orbit_v1_gateway_proto_depIdxs = []int32{
 	4,  // 2: orbit.v1.GatewayFrame.device_offline:type_name -> orbit.v1.DeviceOffline
 	7,  // 3: orbit.v1.GatewayFrame.delivery_started:type_name -> orbit.v1.DeliveryStarted
 	8,  // 4: orbit.v1.GatewayFrame.command_ack:type_name -> orbit.v1.GatewayCommandAck
-	5,  // 5: orbit.v1.ControlFrame.device_session:type_name -> orbit.v1.DeviceSession
-	6,  // 6: orbit.v1.ControlFrame.command_assignment:type_name -> orbit.v1.GatewayCommandAssignment
-	9,  // 7: orbit.v1.GatewayCommandAssignment.command:type_name -> orbit.v1.CommandDelivery
-	10, // 8: orbit.v1.GatewayCommandAck.ack:type_name -> orbit.v1.CommandAck
-	0,  // 9: orbit.v1.GatewayControlService.Connect:input_type -> orbit.v1.GatewayFrame
-	1,  // 10: orbit.v1.GatewayControlService.Connect:output_type -> orbit.v1.ControlFrame
-	10, // [10:11] is the sub-list for method output_type
-	9,  // [9:10] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	9,  // 5: orbit.v1.GatewayFrame.heartbeat:type_name -> orbit.v1.Heartbeat
+	5,  // 6: orbit.v1.ControlFrame.device_session:type_name -> orbit.v1.DeviceSession
+	6,  // 7: orbit.v1.ControlFrame.command_assignment:type_name -> orbit.v1.GatewayCommandAssignment
+	9,  // 8: orbit.v1.ControlFrame.heartbeat:type_name -> orbit.v1.Heartbeat
+	10, // 9: orbit.v1.GatewayCommandAssignment.command:type_name -> orbit.v1.CommandDelivery
+	11, // 10: orbit.v1.GatewayCommandAck.ack:type_name -> orbit.v1.CommandAck
+	0,  // 11: orbit.v1.GatewayControlService.Connect:input_type -> orbit.v1.GatewayFrame
+	1,  // 12: orbit.v1.GatewayControlService.Connect:output_type -> orbit.v1.ControlFrame
+	12, // [12:13] is the sub-list for method output_type
+	11, // [11:12] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_orbit_v1_gateway_proto_init() }
@@ -734,10 +771,12 @@ func file_orbit_v1_gateway_proto_init() {
 		(*GatewayFrame_DeviceOffline)(nil),
 		(*GatewayFrame_DeliveryStarted)(nil),
 		(*GatewayFrame_CommandAck)(nil),
+		(*GatewayFrame_Heartbeat)(nil),
 	}
 	file_orbit_v1_gateway_proto_msgTypes[1].OneofWrappers = []any{
 		(*ControlFrame_DeviceSession)(nil),
 		(*ControlFrame_CommandAssignment)(nil),
+		(*ControlFrame_Heartbeat)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

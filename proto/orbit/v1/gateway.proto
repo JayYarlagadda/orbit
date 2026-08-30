@@ -17,6 +17,7 @@ message GatewayFrame {
     DeviceOffline device_offline = 3;
     DeliveryStarted delivery_started = 4;
     GatewayCommandAck command_ack = 5;
+    Heartbeat heartbeat = 6;
   }
 }
 
@@ -24,6 +25,7 @@ message ControlFrame {
   oneof body {
     DeviceSession device_session = 1;
     GatewayCommandAssignment command_assignment = 2;
+    Heartbeat heartbeat = 3;
   }
 }
 

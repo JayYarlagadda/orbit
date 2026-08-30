@@ -13,6 +13,7 @@ import (
 	orbitv1 "github.com/JayYarlagadda/orbit/gen/orbit/v1"
 	"github.com/JayYarlagadda/orbit/internal/config"
 	"github.com/JayYarlagadda/orbit/internal/gateway"
+	"github.com/JayYarlagadda/orbit/internal/heartbeat"
 	"github.com/JayYarlagadda/orbit/internal/shutdownsignal"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -62,6 +63,10 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	defer controlConnection.Close()
+	heartbeatSettings := heartbeat.Settings{
+		Interval: settings.HeartbeatInterval,
+		Timeout:  settings.HeartbeatTimeout,
+	}
 	controlErrors := make(chan error, 1)
 	go func() {
 		controlErrors <- gateway.RunControl(
@@ -73,6 +78,7 @@ func run(logger *slog.Logger) error {
 				InitialDelay:      settings.ReconnectInitialDelay,
 				MaxDelay:          settings.ReconnectMaxDelay,
 				MaxAttempts:       settings.MaxReconnectAttempts,
+				Heartbeat:         heartbeatSettings,
 				Logger:            logger,
 			},
 		)
@@ -87,7 +93,9 @@ func run(logger *slog.Logger) error {
 		grpc.MaxRecvMsgSize(maxGRPCMessageBytes),
 		grpc.MaxSendMsgSize(maxGRPCMessageBytes),
 	)
-	orbitv1.RegisterDeviceServiceServer(server, gateway.NewDeviceService(hub))
+	deviceService := gateway.NewDeviceService(hub)
+	deviceService.Heartbeat = heartbeatSettings
+	orbitv1.RegisterDeviceServiceServer(server, deviceService)
 	healthServer := health.NewServer()
 	grpc_health_v1.RegisterHealthServer(server, healthServer)
 	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)

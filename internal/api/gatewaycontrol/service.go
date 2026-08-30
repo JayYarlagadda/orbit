@@ -10,6 +10,7 @@ import (
 
 	orbitv1 "github.com/JayYarlagadda/orbit/gen/orbit/v1"
 	"github.com/JayYarlagadda/orbit/internal/command"
+	"github.com/JayYarlagadda/orbit/internal/heartbeat"
 	"github.com/JayYarlagadda/orbit/internal/scheduler"
 	"github.com/JayYarlagadda/orbit/internal/session"
 	"google.golang.org/grpc/codes"
@@ -31,6 +32,7 @@ type Config struct {
 	SweepLimit     int
 	LeaseDuration  time.Duration
 	PollInterval   time.Duration
+	Heartbeat      heartbeat.Settings
 }
 
 type Service struct {
@@ -66,7 +68,18 @@ func (s *Service) Connect(stream orbitv1.GatewayControlService_ConnectServer) er
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	ctx, cancel := context.WithCancel(stream.Context())
+	settings := s.config.Heartbeat
+	if settings.Interval == 0 {
+		settings = heartbeat.Default()
+	}
+	if err := settings.Validate(); err != nil {
+		return status.Error(codes.Internal, err.Error())
+	}
+	watch := heartbeat.NewWatch(settings.Timeout)
+	watchCtx, stopWatch := heartbeat.WatchContext(stream.Context(), watch)
+	defer stopWatch()
+
+	ctx, cancel := context.WithCancel(watchCtx)
 	defer cancel()
 	outbound := make(chan *orbitv1.ControlFrame, s.config.OutboundBuffer)
 	routes := newRouteTable()
@@ -105,7 +118,7 @@ func (s *Service) Connect(stream orbitv1.GatewayControlService_ConnectServer) er
 	}()
 
 	received := make(chan receiveResult, 1)
-	go receiveFrames(ctx, stream, received)
+	go receiveFrames(watchCtx, stream, received)
 	schedulerErrors := make(chan error, 1)
 	go commandScheduler.Run(ctx, func(err error) {
 		select {
@@ -114,18 +127,28 @@ func (s *Service) Connect(stream orbitv1.GatewayControlService_ConnectServer) er
 		}
 	})
 
+	ticker := time.NewTicker(settings.Interval)
+	defer ticker.Stop()
 	defer s.releaseRoutes(gatewayID, routes)
 	for {
 		select {
-		case <-ctx.Done():
-			return mapStreamError(ctx.Err())
+		case <-watchCtx.Done():
+			return mapStreamError(context.Cause(watchCtx))
 		case err := <-sendErrors:
 			return mapStreamError(err)
 		case err := <-schedulerErrors:
 			return status.Error(codes.Unavailable, err.Error())
+		case <-ticker.C:
+			if err := stream.Send(&orbitv1.ControlFrame{Body: &orbitv1.ControlFrame_Heartbeat{Heartbeat: &orbitv1.Heartbeat{}}}); err != nil {
+				return mapStreamError(err)
+			}
 		case result := <-received:
 			if result.err != nil {
 				return mapStreamError(result.err)
+			}
+			watch.Touch()
+			if result.frame.GetHeartbeat() != nil {
+				continue
 			}
 			if err := s.handleFrame(ctx, gatewayID, routes, outbound, result.frame); err != nil {
 				return err
@@ -164,6 +187,9 @@ func (s *Service) handleFrame(
 	outbound chan<- *orbitv1.ControlFrame,
 	frame *orbitv1.GatewayFrame,
 ) error {
+	if frame.GetHeartbeat() != nil {
+		return nil
+	}
 	if online := frame.GetDeviceOnline(); online != nil {
 		connectionID, err := session.NormalizeIdentifier("connection_id", online.ConnectionId)
 		if err != nil {
@@ -359,6 +385,8 @@ func mapStreamError(err error) error {
 		return nil
 	case errors.Is(err, context.Canceled):
 		return status.Error(codes.Canceled, "gateway stream canceled")
+	case errors.Is(err, heartbeat.ErrTimeout):
+		return status.Error(codes.Unavailable, err.Error())
 	default:
 		return err
 	}

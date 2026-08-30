@@ -11,6 +11,7 @@ import (
 	"github.com/JayYarlagadda/orbit/internal/api/commandservice"
 	"github.com/JayYarlagadda/orbit/internal/api/gatewaycontrol"
 	"github.com/JayYarlagadda/orbit/internal/config"
+	"github.com/JayYarlagadda/orbit/internal/heartbeat"
 	"github.com/JayYarlagadda/orbit/internal/shutdownsignal"
 	"github.com/JayYarlagadda/orbit/internal/storage/postgres"
 	"google.golang.org/grpc"
@@ -61,6 +62,10 @@ func run(logger *slog.Logger) error {
 		SweepLimit:     settings.SchedulerSweepBatch,
 		LeaseDuration:  settings.SchedulerLeaseDuration,
 		PollInterval:   settings.SchedulerPollInterval,
+		Heartbeat: heartbeat.Settings{
+			Interval: settings.HeartbeatInterval,
+			Timeout:  settings.HeartbeatTimeout,
+		},
 	})
 	if err != nil {
 		return err

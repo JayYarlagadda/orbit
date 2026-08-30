@@ -9,16 +9,20 @@ import (
 	"time"
 
 	orbitv1 "github.com/JayYarlagadda/orbit/gen/orbit/v1"
+	"github.com/JayYarlagadda/orbit/internal/heartbeat"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 type DeviceService struct {
 	orbitv1.UnimplementedDeviceServiceServer
-	hub *Hub
+	hub       *Hub
+	Heartbeat heartbeat.Settings
 }
 
-func NewDeviceService(hub *Hub) *DeviceService { return &DeviceService{hub: hub} }
+func NewDeviceService(hub *Hub) *DeviceService {
+	return &DeviceService{hub: hub, Heartbeat: heartbeat.Default()}
+}
 
 func (s *DeviceService) Connect(stream orbitv1.DeviceService_ConnectServer) error {
 	first, err := stream.Recv()
@@ -53,26 +57,46 @@ func (s *DeviceService) Connect(stream orbitv1.DeviceService_ConnectServer) erro
 	}
 
 	received := make(chan deviceReceiveResult, 1)
-	go receiveDeviceFrames(stream.Context(), stream, received)
+	settings := s.Heartbeat
+	if settings.Interval == 0 {
+		settings = heartbeat.Default()
+	}
+	if err := settings.Validate(); err != nil {
+		return status.Error(codes.Internal, err.Error())
+	}
+	watch := heartbeat.NewWatch(settings.Timeout)
+	watchCtx, stopWatch := heartbeat.WatchContext(stream.Context(), watch)
+	defer stopWatch()
+	go receiveDeviceFrames(watchCtx, stream, received)
+	ticker := time.NewTicker(settings.Interval)
+	defer ticker.Stop()
 	for {
 		select {
-		case <-stream.Context().Done():
-			return deviceStreamError(stream.Context().Err())
+		case <-watchCtx.Done():
+			return deviceStreamError(context.Cause(watchCtx))
+		case <-ticker.C:
+			if err := stream.Send(&orbitv1.ServerFrame{Body: &orbitv1.ServerFrame_Heartbeat{Heartbeat: &orbitv1.Heartbeat{}}}); err != nil {
+				return deviceStreamError(err)
+			}
 		case <-connection.Disconnected():
 			// The control plane released this session, so nothing can be
 			// routed to it any more. Ending the stream makes the device
 			// reconnect and register for a fresh epoch.
 			return deviceStreamError(ErrControlDisconnected)
 		case result := <-received:
+			watch.Touch()
 			if connection.ended() {
 				return deviceStreamError(ErrControlDisconnected)
 			}
 			if result.err != nil {
 				return deviceStreamError(result.err)
 			}
+			if result.frame.GetHeartbeat() != nil {
+				continue
+			}
 			ack := result.frame.GetAck()
 			if ack == nil {
-				return status.Error(codes.InvalidArgument, "device stream accepts only ACK frames after hello")
+				return status.Error(codes.InvalidArgument, "device stream accepts only ACK or heartbeat frames after hello")
 			}
 			if ack.DeviceId != connection.DeviceID || ack.SessionEpoch != connection.SessionEpoch {
 				return status.Error(codes.FailedPrecondition, "ACK does not match the active device session")
@@ -143,6 +167,8 @@ func deviceStreamError(err error) error {
 		return nil
 	case errors.Is(err, context.Canceled):
 		return status.Error(codes.Canceled, "device stream canceled")
+	case errors.Is(err, heartbeat.ErrTimeout):
+		return status.Error(codes.Unavailable, err.Error())
 	case errors.Is(err, ErrControlDisconnected):
 		return status.Error(codes.Unavailable, ErrControlDisconnected.Error())
 	default:

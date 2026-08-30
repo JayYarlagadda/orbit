@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/JayYarlagadda/orbit/internal/heartbeat"
 	"github.com/JayYarlagadda/orbit/internal/session"
 )
 
@@ -19,6 +20,8 @@ type Gateway struct {
 	ReconnectInitialDelay time.Duration
 	ReconnectMaxDelay     time.Duration
 	MaxReconnectAttempts  int
+	HeartbeatInterval     time.Duration
+	HeartbeatTimeout      time.Duration
 }
 
 // LoadGateway reads the gateway settings. MaxReconnectAttempts counts
@@ -33,6 +36,8 @@ func LoadGateway(lookup LookupEnv) (Gateway, error) {
 		ConnectionBuffer:      16,
 		ReconnectInitialDelay: defaultReconnectInitial,
 		ReconnectMaxDelay:     defaultReconnectMax,
+		HeartbeatInterval:     heartbeat.DefaultInterval,
+		HeartbeatTimeout:      heartbeat.DefaultTimeout,
 	}
 	value, ok := lookup("ORBIT_GATEWAY_ID")
 	if !ok {
@@ -103,6 +108,15 @@ func LoadGateway(lookup LookupEnv) (Gateway, error) {
 	// accumulate instead of growing.
 	if result.ReconnectMaxDelay < result.ReconnectInitialDelay {
 		return Gateway{}, fmt.Errorf("ORBIT_GATEWAY_RECONNECT_MAX_DELAY must not be below ORBIT_GATEWAY_RECONNECT_INITIAL_DELAY")
+	}
+	if err := applyHeartbeatSettings(
+		lookup,
+		"ORBIT_GATEWAY_HEARTBEAT_INTERVAL",
+		"ORBIT_GATEWAY_HEARTBEAT_TIMEOUT",
+		&result.HeartbeatInterval,
+		&result.HeartbeatTimeout,
+	); err != nil {
+		return Gateway{}, err
 	}
 	return result, nil
 }

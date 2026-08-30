@@ -28,6 +28,7 @@ type DeviceFrame struct {
 	//
 	//	*DeviceFrame_Hello
 	//	*DeviceFrame_Ack
+	//	*DeviceFrame_Heartbeat
 	Body          isDeviceFrame_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -88,6 +89,15 @@ func (x *DeviceFrame) GetAck() *CommandAck {
 	return nil
 }
 
+func (x *DeviceFrame) GetHeartbeat() *Heartbeat {
+	if x != nil {
+		if x, ok := x.Body.(*DeviceFrame_Heartbeat); ok {
+			return x.Heartbeat
+		}
+	}
+	return nil
+}
+
 type isDeviceFrame_Body interface {
 	isDeviceFrame_Body()
 }
@@ -100,9 +110,15 @@ type DeviceFrame_Ack struct {
 	Ack *CommandAck `protobuf:"bytes,2,opt,name=ack,proto3,oneof"`
 }
 
+type DeviceFrame_Heartbeat struct {
+	Heartbeat *Heartbeat `protobuf:"bytes,3,opt,name=heartbeat,proto3,oneof"`
+}
+
 func (*DeviceFrame_Hello) isDeviceFrame_Body() {}
 
 func (*DeviceFrame_Ack) isDeviceFrame_Body() {}
+
+func (*DeviceFrame_Heartbeat) isDeviceFrame_Body() {}
 
 type ServerFrame struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -110,6 +126,7 @@ type ServerFrame struct {
 	//
 	//	*ServerFrame_SessionOpened
 	//	*ServerFrame_Command
+	//	*ServerFrame_Heartbeat
 	Body          isServerFrame_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -170,6 +187,15 @@ func (x *ServerFrame) GetCommand() *CommandDelivery {
 	return nil
 }
 
+func (x *ServerFrame) GetHeartbeat() *Heartbeat {
+	if x != nil {
+		if x, ok := x.Body.(*ServerFrame_Heartbeat); ok {
+			return x.Heartbeat
+		}
+	}
+	return nil
+}
+
 type isServerFrame_Body interface {
 	isServerFrame_Body()
 }
@@ -182,9 +208,51 @@ type ServerFrame_Command struct {
 	Command *CommandDelivery `protobuf:"bytes,2,opt,name=command,proto3,oneof"`
 }
 
+type ServerFrame_Heartbeat struct {
+	Heartbeat *Heartbeat `protobuf:"bytes,3,opt,name=heartbeat,proto3,oneof"`
+}
+
 func (*ServerFrame_SessionOpened) isServerFrame_Body() {}
 
 func (*ServerFrame_Command) isServerFrame_Body() {}
+
+func (*ServerFrame_Heartbeat) isServerFrame_Body() {}
+
+type Heartbeat struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Heartbeat) Reset() {
+	*x = Heartbeat{}
+	mi := &file_orbit_v1_device_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Heartbeat) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Heartbeat) ProtoMessage() {}
+
+func (x *Heartbeat) ProtoReflect() protoreflect.Message {
+	mi := &file_orbit_v1_device_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Heartbeat.ProtoReflect.Descriptor instead.
+func (*Heartbeat) Descriptor() ([]byte, []int) {
+	return file_orbit_v1_device_proto_rawDescGZIP(), []int{2}
+}
 
 type DeviceHello struct {
 	state                    protoimpl.MessageState `protogen:"open.v1"`
@@ -198,7 +266,7 @@ type DeviceHello struct {
 
 func (x *DeviceHello) Reset() {
 	*x = DeviceHello{}
-	mi := &file_orbit_v1_device_proto_msgTypes[2]
+	mi := &file_orbit_v1_device_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -210,7 +278,7 @@ func (x *DeviceHello) String() string {
 func (*DeviceHello) ProtoMessage() {}
 
 func (x *DeviceHello) ProtoReflect() protoreflect.Message {
-	mi := &file_orbit_v1_device_proto_msgTypes[2]
+	mi := &file_orbit_v1_device_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -223,7 +291,7 @@ func (x *DeviceHello) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeviceHello.ProtoReflect.Descriptor instead.
 func (*DeviceHello) Descriptor() ([]byte, []int) {
-	return file_orbit_v1_device_proto_rawDescGZIP(), []int{2}
+	return file_orbit_v1_device_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *DeviceHello) GetDeviceId() string {
@@ -264,7 +332,7 @@ type SessionOpened struct {
 
 func (x *SessionOpened) Reset() {
 	*x = SessionOpened{}
-	mi := &file_orbit_v1_device_proto_msgTypes[3]
+	mi := &file_orbit_v1_device_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -276,7 +344,7 @@ func (x *SessionOpened) String() string {
 func (*SessionOpened) ProtoMessage() {}
 
 func (x *SessionOpened) ProtoReflect() protoreflect.Message {
-	mi := &file_orbit_v1_device_proto_msgTypes[3]
+	mi := &file_orbit_v1_device_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -289,7 +357,7 @@ func (x *SessionOpened) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SessionOpened.ProtoReflect.Descriptor instead.
 func (*SessionOpened) Descriptor() ([]byte, []int) {
-	return file_orbit_v1_device_proto_rawDescGZIP(), []int{3}
+	return file_orbit_v1_device_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *SessionOpened) GetDeviceId() string {
@@ -323,7 +391,7 @@ type CommandDelivery struct {
 
 func (x *CommandDelivery) Reset() {
 	*x = CommandDelivery{}
-	mi := &file_orbit_v1_device_proto_msgTypes[4]
+	mi := &file_orbit_v1_device_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -335,7 +403,7 @@ func (x *CommandDelivery) String() string {
 func (*CommandDelivery) ProtoMessage() {}
 
 func (x *CommandDelivery) ProtoReflect() protoreflect.Message {
-	mi := &file_orbit_v1_device_proto_msgTypes[4]
+	mi := &file_orbit_v1_device_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -348,7 +416,7 @@ func (x *CommandDelivery) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandDelivery.ProtoReflect.Descriptor instead.
 func (*CommandDelivery) Descriptor() ([]byte, []int) {
-	return file_orbit_v1_device_proto_rawDescGZIP(), []int{4}
+	return file_orbit_v1_device_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *CommandDelivery) GetCommandId() string {
@@ -429,7 +497,7 @@ type CommandAck struct {
 
 func (x *CommandAck) Reset() {
 	*x = CommandAck{}
-	mi := &file_orbit_v1_device_proto_msgTypes[5]
+	mi := &file_orbit_v1_device_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -441,7 +509,7 @@ func (x *CommandAck) String() string {
 func (*CommandAck) ProtoMessage() {}
 
 func (x *CommandAck) ProtoReflect() protoreflect.Message {
-	mi := &file_orbit_v1_device_proto_msgTypes[5]
+	mi := &file_orbit_v1_device_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -454,7 +522,7 @@ func (x *CommandAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandAck.ProtoReflect.Descriptor instead.
 func (*CommandAck) Descriptor() ([]byte, []int) {
-	return file_orbit_v1_device_proto_rawDescGZIP(), []int{5}
+	return file_orbit_v1_device_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *CommandAck) GetCommandId() string {
@@ -510,15 +578,18 @@ var File_orbit_v1_device_proto protoreflect.FileDescriptor
 
 const file_orbit_v1_device_proto_rawDesc = "" +
 	"\n" +
-	"\x15orbit/v1/device.proto\x12\borbit.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"n\n" +
+	"\x15orbit/v1/device.proto\x12\borbit.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xa3\x01\n" +
 	"\vDeviceFrame\x12-\n" +
 	"\x05hello\x18\x01 \x01(\v2\x15.orbit.v1.DeviceHelloH\x00R\x05hello\x12(\n" +
-	"\x03ack\x18\x02 \x01(\v2\x14.orbit.v1.CommandAckH\x00R\x03ackB\x06\n" +
-	"\x04body\"\x8e\x01\n" +
+	"\x03ack\x18\x02 \x01(\v2\x14.orbit.v1.CommandAckH\x00R\x03ack\x123\n" +
+	"\theartbeat\x18\x03 \x01(\v2\x13.orbit.v1.HeartbeatH\x00R\theartbeatB\x06\n" +
+	"\x04body\"\xc3\x01\n" +
 	"\vServerFrame\x12@\n" +
 	"\x0esession_opened\x18\x01 \x01(\v2\x17.orbit.v1.SessionOpenedH\x00R\rsessionOpened\x125\n" +
-	"\acommand\x18\x02 \x01(\v2\x19.orbit.v1.CommandDeliveryH\x00R\acommandB\x06\n" +
-	"\x04body\"\xc5\x01\n" +
+	"\acommand\x18\x02 \x01(\v2\x19.orbit.v1.CommandDeliveryH\x00R\acommand\x123\n" +
+	"\theartbeat\x18\x03 \x01(\v2\x13.orbit.v1.HeartbeatH\x00R\theartbeatB\x06\n" +
+	"\x04body\"\v\n" +
+	"\tHeartbeat\"\xc5\x01\n" +
 	"\vDeviceHello\x12\x1b\n" +
 	"\tdevice_id\x18\x01 \x01(\tR\bdeviceId\x12,\n" +
 	"\x12client_instance_id\x18\x02 \x01(\tR\x10clientInstanceId\x12=\n" +
@@ -567,30 +638,33 @@ func file_orbit_v1_device_proto_rawDescGZIP() []byte {
 	return file_orbit_v1_device_proto_rawDescData
 }
 
-var file_orbit_v1_device_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_orbit_v1_device_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_orbit_v1_device_proto_goTypes = []any{
 	(*DeviceFrame)(nil),           // 0: orbit.v1.DeviceFrame
 	(*ServerFrame)(nil),           // 1: orbit.v1.ServerFrame
-	(*DeviceHello)(nil),           // 2: orbit.v1.DeviceHello
-	(*SessionOpened)(nil),         // 3: orbit.v1.SessionOpened
-	(*CommandDelivery)(nil),       // 4: orbit.v1.CommandDelivery
-	(*CommandAck)(nil),            // 5: orbit.v1.CommandAck
-	(*timestamppb.Timestamp)(nil), // 6: google.protobuf.Timestamp
+	(*Heartbeat)(nil),             // 2: orbit.v1.Heartbeat
+	(*DeviceHello)(nil),           // 3: orbit.v1.DeviceHello
+	(*SessionOpened)(nil),         // 4: orbit.v1.SessionOpened
+	(*CommandDelivery)(nil),       // 5: orbit.v1.CommandDelivery
+	(*CommandAck)(nil),            // 6: orbit.v1.CommandAck
+	(*timestamppb.Timestamp)(nil), // 7: google.protobuf.Timestamp
 }
 var file_orbit_v1_device_proto_depIdxs = []int32{
-	2, // 0: orbit.v1.DeviceFrame.hello:type_name -> orbit.v1.DeviceHello
-	5, // 1: orbit.v1.DeviceFrame.ack:type_name -> orbit.v1.CommandAck
-	3, // 2: orbit.v1.ServerFrame.session_opened:type_name -> orbit.v1.SessionOpened
-	4, // 3: orbit.v1.ServerFrame.command:type_name -> orbit.v1.CommandDelivery
-	6, // 4: orbit.v1.CommandDelivery.expires_at:type_name -> google.protobuf.Timestamp
-	6, // 5: orbit.v1.CommandAck.client_applied_at:type_name -> google.protobuf.Timestamp
-	0, // 6: orbit.v1.DeviceService.Connect:input_type -> orbit.v1.DeviceFrame
-	1, // 7: orbit.v1.DeviceService.Connect:output_type -> orbit.v1.ServerFrame
-	7, // [7:8] is the sub-list for method output_type
-	6, // [6:7] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	3, // 0: orbit.v1.DeviceFrame.hello:type_name -> orbit.v1.DeviceHello
+	6, // 1: orbit.v1.DeviceFrame.ack:type_name -> orbit.v1.CommandAck
+	2, // 2: orbit.v1.DeviceFrame.heartbeat:type_name -> orbit.v1.Heartbeat
+	4, // 3: orbit.v1.ServerFrame.session_opened:type_name -> orbit.v1.SessionOpened
+	5, // 4: orbit.v1.ServerFrame.command:type_name -> orbit.v1.CommandDelivery
+	2, // 5: orbit.v1.ServerFrame.heartbeat:type_name -> orbit.v1.Heartbeat
+	7, // 6: orbit.v1.CommandDelivery.expires_at:type_name -> google.protobuf.Timestamp
+	7, // 7: orbit.v1.CommandAck.client_applied_at:type_name -> google.protobuf.Timestamp
+	0, // 8: orbit.v1.DeviceService.Connect:input_type -> orbit.v1.DeviceFrame
+	1, // 9: orbit.v1.DeviceService.Connect:output_type -> orbit.v1.ServerFrame
+	9, // [9:10] is the sub-list for method output_type
+	8, // [8:9] is the sub-list for method input_type
+	8, // [8:8] is the sub-list for extension type_name
+	8, // [8:8] is the sub-list for extension extendee
+	0, // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_orbit_v1_device_proto_init() }
@@ -601,10 +675,12 @@ func file_orbit_v1_device_proto_init() {
 	file_orbit_v1_device_proto_msgTypes[0].OneofWrappers = []any{
 		(*DeviceFrame_Hello)(nil),
 		(*DeviceFrame_Ack)(nil),
+		(*DeviceFrame_Heartbeat)(nil),
 	}
 	file_orbit_v1_device_proto_msgTypes[1].OneofWrappers = []any{
 		(*ServerFrame_SessionOpened)(nil),
 		(*ServerFrame_Command)(nil),
+		(*ServerFrame_Heartbeat)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -612,7 +688,7 @@ func file_orbit_v1_device_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_orbit_v1_device_proto_rawDesc), len(file_orbit_v1_device_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

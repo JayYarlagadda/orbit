@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/JayYarlagadda/orbit/internal/heartbeat"
 )
 
 const (
@@ -30,6 +32,8 @@ type Orbitd struct {
 	SchedulerSweepBatch    int
 	SchedulerLeaseDuration time.Duration
 	SchedulerPollInterval  time.Duration
+	HeartbeatInterval      time.Duration
+	HeartbeatTimeout       time.Duration
 }
 
 func LoadOrbitd(lookup LookupEnv) (Orbitd, error) {
@@ -42,6 +46,8 @@ func LoadOrbitd(lookup LookupEnv) (Orbitd, error) {
 		SchedulerSweepBatch:    defaultSweepBatch,
 		SchedulerLeaseDuration: defaultLeaseDuration,
 		SchedulerPollInterval:  defaultPollInterval,
+		HeartbeatInterval:      heartbeat.DefaultInterval,
+		HeartbeatTimeout:       heartbeat.DefaultTimeout,
 	}
 
 	if value, ok := lookup("ORBIT_LISTEN_ADDRESS"); ok {
@@ -107,6 +113,15 @@ func LoadOrbitd(lookup LookupEnv) (Orbitd, error) {
 			}
 			*setting.target = parsed
 		}
+	}
+	if err := applyHeartbeatSettings(
+		lookup,
+		"ORBIT_CONTROL_HEARTBEAT_INTERVAL",
+		"ORBIT_CONTROL_HEARTBEAT_TIMEOUT",
+		&config.HeartbeatInterval,
+		&config.HeartbeatTimeout,
+	); err != nil {
+		return Orbitd{}, err
 	}
 	return config, nil
 }

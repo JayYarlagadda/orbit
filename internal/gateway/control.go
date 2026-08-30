@@ -11,6 +11,7 @@ import (
 
 	orbitv1 "github.com/JayYarlagadda/orbit/gen/orbit/v1"
 	"github.com/JayYarlagadda/orbit/internal/backoff"
+	"github.com/JayYarlagadda/orbit/internal/heartbeat"
 )
 
 // healthyControlStream is how long a control stream must last before the
@@ -26,6 +27,7 @@ type ControlConfig struct {
 	// gateway retries for as long as it runs; the rate stays bounded by
 	// MaxDelay either way.
 	MaxAttempts int
+	Heartbeat   heartbeat.Settings
 	Logger      *slog.Logger
 }
 
@@ -45,6 +47,12 @@ func RunControl(
 	if config.Logger == nil {
 		return errors.New("gateway control stream requires a logger")
 	}
+	if config.Heartbeat.Interval == 0 {
+		config.Heartbeat = heartbeat.Default()
+	}
+	if err := config.Heartbeat.Validate(); err != nil {
+		return err
+	}
 	policy, err := backoff.New(config.InitialDelay, config.MaxDelay)
 	if err != nil {
 		return err
@@ -57,7 +65,7 @@ func RunControl(
 			hub.Rebind()
 		}
 		startedAt := time.Now()
-		streamErr := RunControlStream(ctx, client, hub, config.GatewayInstanceID)
+		streamErr := RunControlStream(ctx, client, hub, config.GatewayInstanceID, config.Heartbeat)
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -98,14 +106,24 @@ func RunControlStream(
 	client orbitv1.GatewayControlServiceClient,
 	hub *Hub,
 	gatewayInstanceID string,
+	settings heartbeat.Settings,
 ) error {
+	if settings.Interval == 0 {
+		settings = heartbeat.Default()
+	}
+	if err := settings.Validate(); err != nil {
+		return err
+	}
 	// Cancelling this context on return aborts the RPC, which is what unblocks
 	// the receive goroutine and stops the send goroutine from consuming
 	// outbound frames that a later stream would need to deliver.
 	streamContext, cancelStream := context.WithCancel(ctx)
 	defer cancelStream()
+	watch := heartbeat.NewWatch(settings.Timeout)
+	watchCtx, stopWatch := heartbeat.WatchContext(streamContext, watch)
+	defer stopWatch()
 
-	stream, err := client.Connect(streamContext)
+	stream, err := client.Connect(watchCtx)
 	if err != nil {
 		return fmt.Errorf("open gateway control stream: %w", err)
 	}
@@ -119,6 +137,8 @@ func RunControlStream(
 	}
 
 	defer hub.Fail()
+	ticker := time.NewTicker(settings.Interval)
+	defer ticker.Stop()
 	var workers sync.WaitGroup
 	sendErrors := make(chan error, 1)
 	workers.Add(1)
@@ -126,8 +146,13 @@ func RunControlStream(
 		defer workers.Done()
 		for {
 			select {
-			case <-streamContext.Done():
+			case <-watchCtx.Done():
 				return
+			case <-ticker.C:
+				if err := stream.Send(&orbitv1.GatewayFrame{Body: &orbitv1.GatewayFrame_Heartbeat{Heartbeat: &orbitv1.Heartbeat{}}}); err != nil {
+					sendErrors <- err
+					return
+				}
 			case frame := <-hub.Outbound():
 				if err := stream.Send(frame); err != nil {
 					sendErrors <- err
@@ -146,7 +171,11 @@ func RunControlStream(
 				receiveErrors <- err
 				return
 			}
-			if err := hub.Deliver(streamContext, frame); err != nil {
+			watch.Touch()
+			if frame.GetHeartbeat() != nil {
+				continue
+			}
+			if err := hub.Deliver(watchCtx, frame); err != nil {
 				receiveErrors <- err
 				return
 			}
@@ -155,9 +184,9 @@ func RunControlStream(
 
 	var runError error
 	select {
-	case <-streamContext.Done():
+	case <-watchCtx.Done():
 		_ = stream.CloseSend()
-		runError = context.Cause(streamContext)
+		runError = context.Cause(watchCtx)
 	case err := <-sendErrors:
 		runError = fmt.Errorf("gateway control send: %w", err)
 	case err := <-receiveErrors:

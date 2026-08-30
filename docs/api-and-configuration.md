@@ -42,16 +42,16 @@ The control plane responds with acquired session epochs and fenced command
 assignments. One bounded writer serializes all server sends on a stream.
 
 `DeviceService.Connect` is hosted by the standalone gateway. Its first frame
-must be `DeviceHello`; subsequent client frames are acknowledgements. The
-gateway returns `SessionOpened` followed by `CommandDelivery` frames. Delivery
-and acknowledgement frames carry both the authoritative session epoch and the
-command lease token.
+must be `DeviceHello`; later client frames are acknowledgements or heartbeats.
+The gateway returns `SessionOpened` followed by `CommandDelivery` frames.
+Delivery and acknowledgement frames carry both the authoritative session epoch
+and the command lease token. Both sides exchange empty `Heartbeat` frames on a
+bounded interval; silence longer than the configured timeout ends the stream.
 
-The current protocol does not yet include heartbeat frames. The gateway and
-reference client both retry failed streams with bounded, jittered backoff.
-Device sessions cannot outlive the control stream that created them: an
-`orbitd` restart makes the gateway drop device connections so they re-register
-for fresh session epochs.
+The gateway and reference client both retry failed streams with bounded,
+jittered backoff. Device sessions cannot outlive the control stream that
+created them: an `orbitd` restart makes the gateway drop device connections so
+they re-register for fresh session epochs.
 
 ## Runtime configuration
 
@@ -68,6 +68,8 @@ for fresh session epochs.
 | `ORBIT_SCHEDULER_SWEEP_BATCH` | `64` | 1 through 256 commands |
 | `ORBIT_SCHEDULER_LEASE_DURATION` | `15s` | 1 second through 5 minutes |
 | `ORBIT_SCHEDULER_POLL_INTERVAL` | `250ms` | 10 milliseconds through 1 minute |
+| `ORBIT_CONTROL_HEARTBEAT_INTERVAL` | `5s` | 10 milliseconds through 1 minute |
+| `ORBIT_CONTROL_HEARTBEAT_TIMEOUT` | `15s` | 100 milliseconds through 5 minutes, and not below the interval |
 
 The gateway process reads a separate bounded configuration:
 
@@ -82,6 +84,8 @@ The gateway process reads a separate bounded configuration:
 | `ORBIT_GATEWAY_MAX_RECONNECT_ATTEMPTS` | `0` | 0 through 1,000; 0 retries while the process runs |
 | `ORBIT_GATEWAY_RECONNECT_INITIAL_DELAY` | `250ms` | 10 milliseconds through 10 seconds |
 | `ORBIT_GATEWAY_RECONNECT_MAX_DELAY` | `10s` | 100 milliseconds through 2 minutes, and not below the initial delay |
+| `ORBIT_GATEWAY_HEARTBEAT_INTERVAL` | `5s` | 10 milliseconds through 1 minute |
+| `ORBIT_GATEWAY_HEARTBEAT_TIMEOUT` | `15s` | 100 milliseconds through 5 minutes, and not below the interval |
 
 The reference client process reads its own bounded configuration:
 
@@ -95,6 +99,8 @@ The reference client process reads its own bounded configuration:
 | `ORBIT_CLIENT_MAX_RECONNECT_ATTEMPTS` | `0` | 0 through 1,000; 0 retries while the process runs |
 | `ORBIT_CLIENT_RECONNECT_INITIAL_DELAY` | `250ms` | 10 milliseconds through 10 seconds |
 | `ORBIT_CLIENT_RECONNECT_MAX_DELAY` | `10s` | 100 milliseconds through 2 minutes, and not below the initial delay |
+| `ORBIT_CLIENT_HEARTBEAT_INTERVAL` | `5s` | 10 milliseconds through 1 minute |
+| `ORBIT_CLIENT_HEARTBEAT_TIMEOUT` | `15s` | 100 milliseconds through 5 minutes, and not below the interval |
 
 Reconnect delay doubles after each consecutive failure until it reaches the
 maximum, and each wait is jittered across the upper half of its window. A

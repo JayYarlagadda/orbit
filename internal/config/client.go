@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/JayYarlagadda/orbit/internal/heartbeat"
 	"github.com/JayYarlagadda/orbit/internal/session"
 )
 
@@ -26,6 +27,8 @@ type Client struct {
 	ReconnectInitialDelay time.Duration
 	ReconnectMaxDelay     time.Duration
 	MaxReconnectAttempts  int
+	HeartbeatInterval     time.Duration
+	HeartbeatTimeout      time.Duration
 }
 
 // LoadClient reads the reference-client settings. MaxReconnectAttempts counts
@@ -38,6 +41,8 @@ func LoadClient(lookup LookupEnv) (Client, error) {
 		DedupRetention:        defaultClientRetention,
 		ReconnectInitialDelay: defaultReconnectInitial,
 		ReconnectMaxDelay:     defaultReconnectMax,
+		HeartbeatInterval:     heartbeat.DefaultInterval,
+		HeartbeatTimeout:      heartbeat.DefaultTimeout,
 	}
 
 	value, ok := lookup("ORBIT_DEVICE_ID")
@@ -110,6 +115,15 @@ func LoadClient(lookup LookupEnv) (Client, error) {
 	}
 	if result.ReconnectMaxDelay < result.ReconnectInitialDelay {
 		return Client{}, fmt.Errorf("ORBIT_CLIENT_RECONNECT_MAX_DELAY must not be below ORBIT_CLIENT_RECONNECT_INITIAL_DELAY")
+	}
+	if err := applyHeartbeatSettings(
+		lookup,
+		"ORBIT_CLIENT_HEARTBEAT_INTERVAL",
+		"ORBIT_CLIENT_HEARTBEAT_TIMEOUT",
+		&result.HeartbeatInterval,
+		&result.HeartbeatTimeout,
+	); err != nil {
+		return Client{}, err
 	}
 	return result, nil
 }
