@@ -57,7 +57,7 @@ evidence remain required.
 | Invariant | Current evidence | Remaining evidence |
 |---|---|---|
 | INV-01 | Closed command transition table; ACK terminal-state database update | Corrupted-history checker test |
-| INV-02 | Durable client state applies a retained command ID once across reopen | Lost-ACK process scenario |
+| INV-02 | Durable client state applies a retained command ID once across reopen; process tests send a duplicate assignment and a lost-ACK reconnect | Scenario history checker |
 | INV-03 | PostgreSQL leases only the earliest non-terminal device sequence | Multi-command device process test |
 | INV-05 | Stale lease token and stale/mismatched session epoch integration tests | Paused-worker process scenario |
 | INV-06 | Submit plus forced audit-failure rollback integration test | API failure injection scenario |

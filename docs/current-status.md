@@ -82,6 +82,14 @@ The following passed on this workstation:
   goroutine-count checks under the race detector. A bounded reconnect soak
   (25 control drop/reconnect cycles plus 30 device connect attempts) stayed
   within 24 goroutines and 16 MiB heap of the post-warmup snapshot.
+- Built `gateway` and `client` executables interrupted while a control or
+  device stream was held open: both became healthy (or persisted session
+  state), then exited 0 within the drain deadline. The tests start the
+  binaries in their own process group so Windows Ctrl+Break does not hit the
+  `go test` parent. `orbitd` shutdown still needs PostgreSQL.
+- Built gateway plus client receiving the same command twice: two durable ACKs,
+  one `applying command` log line, `last_seen_sequence` 1. Built client after
+  a dropped ACK reconnecting and acknowledging without a second apply.
 - Duplicate device-stream delivery invoking the client handler once and
   producing matching ACKs, plus persist-before-ACK surviving a failed ACK send.
 - `scripts/smoke-online.ps1`: built `orbitd`, gateway, and client running as
@@ -113,8 +121,14 @@ restarts. `DeviceService.Connect` is covered in-process: assignment and ACK
 forwarding, hello rejection, rebind teardown without leaking `DeviceOffline`
 onto the next control stream, and a bounded connect/disconnect goroutine check.
 A reconnect soak covers control-stream churn with concurrent device connects.
-The next implementation units are process-level shutdown tests and driving
-duplicate-delivery through separate OS processes.
+Built `gateway` and `client` executables now drain and exit after an interrupt
+(Ctrl+Break on Windows, SIGTERM elsewhere) against holding stubs, so shutdown
+is not tested through `go run`. Duplicate delivery is proven across separate
+`gateway` and `client` processes: two assignments yield two ACKs with the same
+result hash and one handler invocation. A lost ACK followed by reconnect
+replays the command without a second apply. The next implementation units are
+confirming the mid-run `orbitd` restart in `scripts/smoke-online.ps1` against
+real PostgreSQL, and heartbeat frames.
 
 Only in-process reconnect, device-stream, and soak checks have been added on
 top of the online path. No performance, scale, failover, or complete
@@ -123,12 +137,8 @@ numbers.
 
 ## Open Phase 2 work
 
-- Drive duplicate-delivery and disconnect-during-ACK through separate
-  processes, not only the `RunSession` stream tests.
 - Confirm `scripts/smoke-online.ps1` still reaches `ACKNOWLEDGED` after the
   mid-run `orbitd` restart against real PostgreSQL.
-- Test graceful shutdown using built executables. On Windows, Ctrl+C sent to
-  `go run` can terminate the wrapper while leaving its child process alive.
 - Add heartbeat frames.
 - Extend Compose beyond PostgreSQL after the process path is proven. The
   PostgreSQL service itself now starts and reports healthy.
@@ -155,6 +165,6 @@ numbers.
 3. Start the Compose PostgreSQL service and run `scripts/smoke-online.ps1` to
    confirm the online path still reaches durable `ACKNOWLEDGED` after an
    `orbitd` restart.
-4. Test graceful shutdown using built executables, or drive duplicate-delivery
-   through separate processes.
+4. Add heartbeat frames, or run `scripts/smoke-online.ps1` against PostgreSQL
+   to confirm `ACKNOWLEDGED` after an `orbitd` restart.
 5. Update this ledger and the invariant evidence table with the result.

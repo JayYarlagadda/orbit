@@ -5,14 +5,13 @@ import (
 	"log/slog"
 	"net"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	orbitv1 "github.com/JayYarlagadda/orbit/gen/orbit/v1"
 	"github.com/JayYarlagadda/orbit/internal/api/commandservice"
 	"github.com/JayYarlagadda/orbit/internal/api/gatewaycontrol"
 	"github.com/JayYarlagadda/orbit/internal/config"
+	"github.com/JayYarlagadda/orbit/internal/shutdownsignal"
 	"github.com/JayYarlagadda/orbit/internal/storage/postgres"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
@@ -35,7 +34,7 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 
-	rootContext, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	rootContext, stopSignals := shutdownsignal.NotifyContext(context.Background())
 	defer stopSignals()
 
 	pool, err := postgres.Open(rootContext, settings.DatabaseURL, settings.DBMaxConnections)

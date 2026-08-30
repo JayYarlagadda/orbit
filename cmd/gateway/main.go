@@ -8,13 +8,12 @@ import (
 	"log/slog"
 	"net"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	orbitv1 "github.com/JayYarlagadda/orbit/gen/orbit/v1"
 	"github.com/JayYarlagadda/orbit/internal/config"
 	"github.com/JayYarlagadda/orbit/internal/gateway"
+	"github.com/JayYarlagadda/orbit/internal/shutdownsignal"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
@@ -40,7 +39,7 @@ func run(logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	rootContext, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	rootContext, stopSignals := shutdownsignal.NotifyContext(context.Background())
 	defer stopSignals()
 
 	hub, err := gateway.NewHub(gateway.HubConfig{

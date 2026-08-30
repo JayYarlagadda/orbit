@@ -8,14 +8,13 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	orbitv1 "github.com/JayYarlagadda/orbit/gen/orbit/v1"
 	"github.com/JayYarlagadda/orbit/internal/backoff"
 	"github.com/JayYarlagadda/orbit/internal/client"
 	"github.com/JayYarlagadda/orbit/internal/config"
+	"github.com/JayYarlagadda/orbit/internal/shutdownsignal"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -50,7 +49,7 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 
-	rootContext, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	rootContext, stopSignals := shutdownsignal.NotifyContext(context.Background())
 	defer stopSignals()
 
 	connection, err := grpc.NewClient(
