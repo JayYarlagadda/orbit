@@ -327,8 +327,8 @@ type commandResponse struct {
 
 func submitAndWaitAcknowledged(ctx context.Context, orbitctlBinary, controlAddress, deviceID, idempotencyKey string) (string, error) {
 	submit := exec.CommandContext(ctx, orbitctlBinary,
-		"-address", controlAddress,
 		"submit",
+		"-address", controlAddress,
 		"-producer", "scenario-producer",
 		"-idempotency-key", idempotencyKey,
 		"-device", deviceID,
@@ -354,8 +354,8 @@ func submitAndWaitAcknowledged(ctx context.Context, orbitctlBinary, controlAddre
 		default:
 		}
 		get := exec.CommandContext(ctx, orbitctlBinary,
-			"-address", controlAddress,
 			"get",
+			"-address", controlAddress,
 			"-command-id", submitted.CommandID,
 		)
 		get.Env = append(os.Environ(), "GOTOOLCHAIN=local")

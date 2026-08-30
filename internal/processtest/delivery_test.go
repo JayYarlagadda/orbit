@@ -152,7 +152,7 @@ func TestGatewayClientProcessDedupsDuplicateDelivery(t *testing.T) {
 	t.Cleanup(func() { _ = gatewayCmd.Process.Kill() })
 	waitHealthy(t, listenAddress, 10*time.Second)
 
-	var clientLog bytes.Buffer
+	var clientLog logBuffer
 	clientCmd := exec.Command(clientBinary)
 	clientCmd.Env = append(os.Environ(),
 		"ORBIT_DEVICE_ID=edge-dup",
@@ -204,7 +204,7 @@ func TestClientProcessDoesNotReapplyAfterLostAck(t *testing.T) {
 		orbitv1.RegisterDeviceServiceServer(server, device)
 	})
 	statePath := filepath.Join(t.TempDir(), "state.json")
-	var clientLog bytes.Buffer
+	var clientLog logBuffer
 	clientCmd := exec.Command(clientBinary)
 	clientCmd.Env = append(os.Environ(),
 		"ORBIT_DEVICE_ID=edge-lost-ack",

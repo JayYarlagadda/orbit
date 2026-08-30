@@ -117,8 +117,8 @@ func waitForFile(t *testing.T, path string, timeout time.Duration) {
 func submitAndWaitAcknowledged(t *testing.T, orbitctlBinary, controlAddress, idempotencyKey string) string {
 	t.Helper()
 	submit := exec.Command(orbitctlBinary,
-		"-address", controlAddress,
 		"submit",
+		"-address", controlAddress,
 		"-producer", "smoke-producer",
 		"-idempotency-key", idempotencyKey,
 		"-device", "edge-smoke",
@@ -142,8 +142,8 @@ func submitAndWaitAcknowledged(t *testing.T, orbitctlBinary, controlAddress, ide
 	deadline := time.Now().Add(60 * time.Second)
 	for time.Now().Before(deadline) {
 		get := exec.Command(orbitctlBinary,
-			"-address", controlAddress,
 			"get",
+			"-address", controlAddress,
 			"-command-id", submitted.CommandID,
 		)
 		get.Env = append(os.Environ(), "GOTOOLCHAIN=local")

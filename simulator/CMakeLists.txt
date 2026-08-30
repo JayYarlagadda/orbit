@@ -61,6 +61,7 @@ endif()
 
 if(BUILD_TESTING)
   add_executable(orbit_simulator_tests
+    tests/main.cpp
     tests/event_queue_test.cpp
     tests/prng_test.cpp
     tests/schedule_test.cpp
