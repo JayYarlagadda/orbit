@@ -82,6 +82,20 @@ func waitExit(t *testing.T, cmd *exec.Cmd, timeout time.Duration) {
 	}
 }
 
+func waitAfterKill(t *testing.T, cmd *exec.Cmd, timeout time.Duration) {
+	t.Helper()
+	done := make(chan struct{})
+	go func() {
+		_ = cmd.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(timeout):
+		t.Fatalf("process did not exit within %s after kill", timeout)
+	}
+}
+
 type holdingControlServer struct {
 	orbitv1.UnimplementedGatewayControlServiceServer
 }

@@ -86,7 +86,7 @@ func TestOnlineSmokePathWithOrbitdRestart(t *testing.T) {
 	if err := orbitd.Process.Kill(); err != nil {
 		t.Fatalf("stop orbitd: %v", err)
 	}
-	waitExit(t, orbitd, 10*time.Second)
+	waitAfterKill(t, orbitd, 10*time.Second)
 
 	restarted := startProcess(t, "orbitd-restart", orbitdBinary, append(commonEnv,
 		"ORBIT_LISTEN_ADDRESS="+controlAddress,
