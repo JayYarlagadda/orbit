@@ -73,7 +73,7 @@ func Collect(ctx context.Context, pool *pgxpool.Pool, base Record) (Record, erro
 		SELECT command_id::text, COALESCE(old_state::text, ''), new_state::text,
 		       actor, lease_token, correlation_id, occurred_at
 		FROM orbit.audit_events
-		ORDER BY occurred_at, id`)
+		ORDER BY occurred_at, event_id`)
 	if err != nil {
 		return Record{}, fmt.Errorf("query audit events: %w", err)
 	}
