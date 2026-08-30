@@ -186,7 +186,7 @@ func (r *Runner) Run(ctx context.Context) (Result, error) {
 	defer cancel()
 	lifecycleDone := make(chan error, 1)
 	go func() {
-		lifecycleDone <- r.runLifecycle(runCtx, startedAt, schedule, document.Topology.Gateways, gatewayAddresses, deviceID, processes, &lifecycle)
+		lifecycleDone <- r.runLifecycle(runCtx, startedAt, schedule, document.Topology.Gateways, gatewayAddresses, deviceID, statePath, processes, &lifecycle)
 	}()
 
 	playbookErr := r.runPlaybook(runCtx, playbookContext{
@@ -238,25 +238,12 @@ func (r *Runner) runPlaybook(ctx context.Context, playbook playbookContext) erro
 		_, err := submitAndWaitAcknowledged(ctx, r.config.Binaries.Orbitctl, playbook.controlAddress, playbook.deviceID, "online-smoke-1")
 		return err
 	case "offline-reconnect":
-		deadline := time.Now().Add(r.config.Timeout)
-		for time.Now().Before(deadline) {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-			}
-			if _, err := submitAndWaitAcknowledged(ctx, r.config.Binaries.Orbitctl, playbook.controlAddress, playbook.deviceID, "offline-reconnect-1"); err == nil {
-				return nil
-			}
-			time.Sleep(500 * time.Millisecond)
-		}
-		return errors.New("offline-reconnect playbook did not reach ACKNOWLEDGED")
+		return retrySubmitUntilAcknowledged(ctx, r.config.Timeout, r.config.Binaries.Orbitctl, playbook.controlAddress, playbook.deviceID, "offline-reconnect-1")
 	case "dual-gateway-session":
-		if err := waitPlaybookDelay(ctx, 4*time.Second); err != nil {
+		if err := waitPlaybookDelay(ctx, 8*time.Second); err != nil {
 			return err
 		}
-		_, err := submitAndWaitAcknowledged(ctx, r.config.Binaries.Orbitctl, playbook.controlAddress, playbook.deviceID, "dual-gateway-session-1")
-		return err
+		return retrySubmitUntilAcknowledged(ctx, r.config.Timeout, r.config.Binaries.Orbitctl, playbook.controlAddress, playbook.deviceID, "dual-gateway-session-1")
 	case "gateway-crash-before-send":
 		if err := waitPlaybookDelay(ctx, 3*time.Second); err != nil {
 			return err
@@ -269,6 +256,29 @@ func (r *Runner) runPlaybook(ctx context.Context, playbook playbookContext) erro
 	default:
 		return fmt.Errorf("unsupported scenario playbook %q", playbook.document.Name)
 	}
+}
+
+func retrySubmitUntilAcknowledged(
+	ctx context.Context,
+	timeout time.Duration,
+	orbitctlBinary, controlAddress, deviceID, idempotencyKey string,
+) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		attemptCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		_, err := submitAndWaitAcknowledged(attemptCtx, orbitctlBinary, controlAddress, deviceID, idempotencyKey)
+		cancel()
+		if err == nil {
+			return nil
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	return fmt.Errorf("%s playbook did not reach ACKNOWLEDGED", idempotencyKey)
 }
 
 func waitPlaybookDelay(ctx context.Context, delay time.Duration) error {
@@ -289,6 +299,7 @@ func (r *Runner) runLifecycle(
 	topologyGateways []string,
 	gatewayAddresses map[string]string,
 	deviceID string,
+	clientStatePath string,
 	processes *processGroup,
 	lifecycle *[]history.LifecycleEvent,
 ) error {
@@ -340,6 +351,10 @@ func (r *Runner) runLifecycle(
 			if err := processes.start("client", r.config.Binaries.Client, env, r.config.WorkDir); err != nil {
 				return err
 			}
+			if err := waitForFile(ctx, clientStatePath, 20*time.Second); err != nil {
+				return err
+			}
+			time.Sleep(2 * time.Second)
 			*lifecycle = append(*lifecycle, history.LifecycleEvent{
 				AtMS: event.AtMS, Component: "client", Action: "gateway_switch", Detail: event.GatewayID,
 			})
@@ -407,6 +422,9 @@ func submitAndWaitAcknowledged(ctx context.Context, orbitctlBinary, controlAddre
 	}
 
 	deadline := time.Now().Add(60 * time.Second)
+	if ctxDeadline, ok := ctx.Deadline(); ok {
+		deadline = ctxDeadline
+	}
 	for time.Now().Before(deadline) {
 		select {
 		case <-ctx.Done():

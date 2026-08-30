@@ -17,7 +17,12 @@
   },
   "events": [
     {
-      "at_ms": 2000,
+      "at_ms": 1500,
+      "type": "device_disconnect",
+      "device_id": "device-a"
+    },
+    {
+      "at_ms": 3000,
       "type": "device_gateway_switch",
       "device_id": "device-a",
       "gateway_id": "gateway-b"
