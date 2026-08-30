@@ -1,6 +1,7 @@
 package scenariorunner
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -78,19 +79,19 @@ func TestRunnerOnlineSmoke(t *testing.T) {
 }
 
 func buildScenarioBinaries(dir string) (Binaries, error) {
-	orbitd, err := buildBinary(dir, "./cmd/orbitd", "orbitd")
+	orbitd, err := buildBinary(dir, "github.com/JayYarlagadda/orbit/cmd/orbitd", "orbitd")
 	if err != nil {
 		return Binaries{}, err
 	}
-	gateway, err := buildBinary(dir, "./cmd/gateway", "gateway")
+	gateway, err := buildBinary(dir, "github.com/JayYarlagadda/orbit/cmd/gateway", "gateway")
 	if err != nil {
 		return Binaries{}, err
 	}
-	client, err := buildBinary(dir, "./cmd/client", "client")
+	client, err := buildBinary(dir, "github.com/JayYarlagadda/orbit/cmd/client", "client")
 	if err != nil {
 		return Binaries{}, err
 	}
-	orbitctl, err := buildBinary(dir, "./cmd/orbitctl", "orbitctl")
+	orbitctl, err := buildBinary(dir, "github.com/JayYarlagadda/orbit/cmd/orbitctl", "orbitctl")
 	if err != nil {
 		return Binaries{}, err
 	}
@@ -111,7 +112,7 @@ func buildBinary(dir, packagePath, name string) (string, error) {
 	cmd.Env = append(os.Environ(), "GOTOOLCHAIN=local")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("go build %s: %w\n%s", packagePath, err, out)
 	}
 	_ = out
 	return output, nil
