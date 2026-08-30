@@ -91,6 +91,8 @@ The gateway process reads a separate bounded configuration:
 | `ORBIT_GATEWAY_RECONNECT_MAX_DELAY` | `10s` | 100 milliseconds through 2 minutes, and not below the initial delay |
 | `ORBIT_GATEWAY_HEARTBEAT_INTERVAL` | `5s` | 10 milliseconds through 1 minute |
 | `ORBIT_GATEWAY_HEARTBEAT_TIMEOUT` | `15s` | 100 milliseconds through 5 minutes, and not below the interval |
+| `ORBIT_GATEWAY_FAULT_SCHEDULE_PATH` | none | Optional compiled schedule JSON for logical transport faults |
+| `ORBIT_SCENARIO_STARTED_AT` | none | RFC3339Nano epoch shared with the scenario runner when fault injection is enabled |
 
 The reference client process reads its own bounded configuration:
 

@@ -3,13 +3,13 @@ package command
 import "errors"
 
 const (
-	DefaultGlobalAdmissionLimit   = 10_000
+	DefaultGlobalAdmissionLimit    = 10_000
 	DefaultPerDeviceAdmissionLimit = 256
 )
 
 // AdmissionLimits bound durable outstanding work accepted by SubmitCommand.
 type AdmissionLimits struct {
-	GlobalMax   int
+	GlobalMax    int
 	PerDeviceMax int
 }
 

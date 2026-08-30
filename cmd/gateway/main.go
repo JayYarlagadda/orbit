@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"os"
@@ -12,6 +13,7 @@ import (
 
 	orbitv1 "github.com/JayYarlagadda/orbit/gen/orbit/v1"
 	"github.com/JayYarlagadda/orbit/internal/config"
+	"github.com/JayYarlagadda/orbit/internal/faultschedule"
 	"github.com/JayYarlagadda/orbit/internal/gateway"
 	"github.com/JayYarlagadda/orbit/internal/heartbeat"
 	"github.com/JayYarlagadda/orbit/internal/shutdownsignal"
@@ -95,6 +97,21 @@ func run(logger *slog.Logger) error {
 	)
 	deviceService := gateway.NewDeviceService(hub)
 	deviceService.Heartbeat = heartbeatSettings
+	if schedulePath, ok := os.LookupEnv("ORBIT_GATEWAY_FAULT_SCHEDULE_PATH"); ok && schedulePath != "" {
+		startedAt := time.Now().UTC()
+		if value, ok := os.LookupEnv("ORBIT_SCENARIO_STARTED_AT"); ok && value != "" {
+			parsed, err := time.Parse(time.RFC3339Nano, value)
+			if err != nil {
+				return fmt.Errorf("parse ORBIT_SCENARIO_STARTED_AT: %w", err)
+			}
+			startedAt = parsed.UTC()
+		}
+		faults, err := faultschedule.LoadController(schedulePath, startedAt)
+		if err != nil {
+			return err
+		}
+		deviceService.Faults = faults
+	}
 	orbitv1.RegisterDeviceServiceServer(server, deviceService)
 	healthServer := health.NewServer()
 	grpc_health_v1.RegisterHealthServer(server, healthServer)

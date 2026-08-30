@@ -82,12 +82,12 @@ void append_transport_faults(EventQueue& queue, Prng& prng, const Scenario& scen
       if (delivery_roll < profile.delivery_loss_rate) {
         const auto at = tick + latency;
         if (at <= scenario.duration_ms) {
-          queue.push(at, EventType::delivery_drop, device);
+          static_cast<void>(queue.push(at, EventType::delivery_drop, device));
         }
       } else if (delivery_roll < profile.delivery_loss_rate + profile.duplicate_rate) {
         const auto at = tick + latency;
         if (at <= scenario.duration_ms) {
-          queue.push(at, EventType::delivery_duplicate, device);
+          static_cast<void>(queue.push(at, EventType::delivery_duplicate, device));
         }
       }
 
@@ -96,12 +96,12 @@ void append_transport_faults(EventQueue& queue, Prng& prng, const Scenario& scen
       if (ack_roll < profile.ack_loss_rate) {
         const auto at = tick + ack_latency;
         if (at <= scenario.duration_ms) {
-          queue.push(at, EventType::ack_drop, device);
+          static_cast<void>(queue.push(at, EventType::ack_drop, device));
         }
       } else if (ack_roll < profile.ack_loss_rate + profile.duplicate_rate) {
         const auto at = tick + ack_latency;
         if (at <= scenario.duration_ms) {
-          queue.push(at, EventType::ack_duplicate, device);
+          static_cast<void>(queue.push(at, EventType::ack_duplicate, device));
         }
       }
     }
@@ -152,20 +152,20 @@ Schedule compile_schedule(const Scenario& scenario) {
   EventQueue queue;
   for (const auto& event : scenario.events) {
     if (event.type == "transport_profile") {
-      queue.push(
+      static_cast<void>(queue.push(
           event.at_ms,
           EventType::transport_profile,
           event.device_id,
           true,
-          event.profile);
+          event.profile));
       continue;
     }
     const auto type = parse_event_type(event.type);
     if (!event.device_id.empty()) {
-      queue.push(event.at_ms, type, event.device_id);
+      static_cast<void>(queue.push(event.at_ms, type, event.device_id));
       continue;
     }
-    queue.push(event.at_ms, type, event.gateway_id);
+    static_cast<void>(queue.push(event.at_ms, type, event.gateway_id));
   }
 
   Prng prng(Prng::parse_seed(scenario.seed));

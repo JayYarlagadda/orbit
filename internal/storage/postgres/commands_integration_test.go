@@ -456,8 +456,10 @@ func TestCommandStoreIntegration(t *testing.T) {
 			t.Fatalf("state = %s, want RETRY_WAIT", retrying.State)
 		}
 		wantNext := retryPolicy.NextAttemptAt(1, sweepAt, rand.New(rand.NewSource(7)))
-		if !retrying.NextAttemptAt.Equal(wantNext) {
-			t.Fatalf("next_attempt_at = %s, want %s", retrying.NextAttemptAt, wantNext)
+		gotNext := retrying.NextAttemptAt.Truncate(time.Microsecond)
+		wantNext = wantNext.Truncate(time.Microsecond)
+		if !gotNext.Equal(wantNext) {
+			t.Fatalf("next_attempt_at = %s, want %s", gotNext, wantNext)
 		}
 	})
 

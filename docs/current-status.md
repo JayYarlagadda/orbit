@@ -14,8 +14,8 @@ this file records what actually exists and what has been verified.
 | M1 durable API | Complete locally | Real gRPC submit/get/cancel against PostgreSQL 18.6; race-enabled repository suite |
 | M2 first delivery | Complete locally | Producer to device to durable `ACKNOWLEDGED` across separate `orbitd`, gateway, and client processes |
 | M3 recovery | Complete locally | Retry/backoff, dead letter, admission limits, gateway-control reconnect, lease/TTL recovery, `orbitd` graceful shutdown test, and online smoke with mid-run `orbitd` restart (CI + `scripts/smoke-online.ps1`) |
-| M4 replay | In progress | SplitMix64 PRNG, scenario schedule compiler in Go and C++, golden schedule fixture; scenario runner and history checker do not |
-| M5-M7 | Not started | No failover runner, telemetry stack, benchmark results, or release evidence |
+| M4 replay | Complete locally | SplitMix64 schedule compiler, gateway logical fault injection, scenario runner, history collector/checker, golden schedule fixture, and online-smoke closed-loop run |
+| M5-M7 | Not started | No dual-gateway failover runner, telemetry stack, benchmark results, or release evidence |
 
 ## Implemented
 
@@ -24,6 +24,10 @@ this file records what actually exists and what has been verified.
 - C++20 deterministic event queue ordered by timestamp then insertion ordinal.
 - SplitMix64 PRNG (`splitmix64-v1`) and a canonical schedule compiler shared
   between Go (`internal/scenario/schedule.go`) and the C++ fault engine.
+- Gateway logical transport fault injection driven by compiled schedules.
+- Go scenario runner (`internal/scenariorunner`) and `scenario-run` CLI that
+  apply lifecycle events, collect PostgreSQL audit history, and run the
+  invariant checker.
 - Pinned Windows bootstrap for Go, CMake, Protobuf, generators, GCC, and Ninja.
 - Protobuf contracts for command, device, and gateway-control services with
   committed generated Go bindings and drift verification.
@@ -125,25 +129,23 @@ leaving the container in a restart loop; the mount is now `/var/lib/postgresql`.
 
 ## Current boundary
 
-M3 recovery is closed in code and CI: retry, dead letter, admission, reconnect,
-lease/TTL recovery, `orbitd` shutdown, and the online smoke path with an
-`orbitd` restart are all covered by automated tests when PostgreSQL is
-available. M4 has started: the Go and C++ compilers emit the same canonical
-schedule for the `offline-reconnect` golden fixture, and the C++ engine expands
-logical transport faults from the scenario network profile using `splitmix64-v1`.
+M4 replay is closed in code and CI: compiled schedules drive gateway logical
+fault injection, the scenario runner executes real `orbitd`/gateway/client
+processes against PostgreSQL, and the history checker validates core invariants
+on captured audit and client-application events. The C++ engine shares golden
+schedule output with Go.
 
-The next implementation unit is the Go scenario runner that applies compiled
-schedules to real Orbit processes and records a normalized history for the
-invariant checker.
+The next implementation unit is **M5 failover**: dual-gateway deployment,
+client gateway selection, and closed-loop replay of gateway-crash scenarios with
+expanded invariant coverage.
 
-No performance, scale, failover, or complete at-least-once claim is justified
-yet, and the README contains no benchmark numbers.
+No performance, scale, or release benchmark claim is justified yet.
 
 ## Open work
 
-- Wire the C++ schedule compiler output into the scenario runner (M4).
-- Implement the history checker against `verification-and-benchmarks.md` (M4/M5).
-- Extend Compose beyond PostgreSQL after the closed-loop replay path is proven.
+- Start **M5**: two gateways, client failover, and dual-gateway scenario playbooks.
+- Extend checker coverage for remaining invariants (INV-04 through INV-08, INV-10–INV-12).
+- Extend Compose beyond PostgreSQL after failover replay is proven.
 
 ## Known limitations
 
@@ -152,8 +154,8 @@ yet, and the README contains no benchmark numbers.
   the terminal expiration sweep, but expiry is only observed when a scheduler
   cycle runs, so a device with no connected gateway keeps its expired commands
   until one does.
-- No history checker, closed-loop fault replay against live services, telemetry
-  pipeline, dashboards, release benchmark, or Kubernetes deployment exists.
+- No dual-gateway failover, telemetry pipeline, dashboards, release benchmark, or
+  Kubernetes deployment exists.
 - Remote CI should be confirmed green on GitHub after the latest push.
 
 ## Safe resume sequence
@@ -164,4 +166,5 @@ yet, and the README contains no benchmark numbers.
 3. Run `scripts/smoke-online.ps1` when validating the full Windows process path.
 4. Build the C++ simulator (`cmake --preset default && ctest --preset default`)
    and confirm the golden schedule test passes.
-5. Implement the Go scenario runner that consumes compiled schedules.
+5. Run `go run ./cmd/scenario-run -scenario scenarios/examples/online-smoke.v1.json`
+   with `ORBIT_DATABASE_URL` set to execute a closed-loop scenario.

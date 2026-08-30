@@ -7,9 +7,9 @@ import (
 )
 
 var (
-	gatewayBinary string
-	clientBinary  string
-	orbitdBinary  string
+	gatewayBinary  string
+	clientBinary   string
+	orbitdBinary   string
 	orbitctlBinary string
 )
 

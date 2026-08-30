@@ -9,6 +9,7 @@ import (
 	"time"
 
 	orbitv1 "github.com/JayYarlagadda/orbit/gen/orbit/v1"
+	"github.com/JayYarlagadda/orbit/internal/faultschedule"
 	"github.com/JayYarlagadda/orbit/internal/heartbeat"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -18,6 +19,7 @@ type DeviceService struct {
 	orbitv1.UnimplementedDeviceServiceServer
 	hub       *Hub
 	Heartbeat heartbeat.Settings
+	Faults    *faultschedule.Controller
 }
 
 func NewDeviceService(hub *Hub) *DeviceService {
@@ -101,9 +103,16 @@ func (s *DeviceService) Connect(stream orbitv1.DeviceService_ConnectServer) erro
 			if ack.DeviceId != connection.DeviceID || ack.SessionEpoch != connection.SessionEpoch {
 				return status.Error(codes.FailedPrecondition, "ACK does not match the active device session")
 			}
+			if s.Faults != nil && s.Faults.ConsumeAckDrop(connection.DeviceID) {
+				continue
+			}
 			if err := s.hub.ReportAcknowledgement(stream.Context(), ack); err != nil {
 				return deviceStreamError(err)
 			}
+			if s.Faults != nil && s.Faults.ConsumeDuplicateAck(connection.DeviceID) {
+				_ = s.hub.ReportAcknowledgement(stream.Context(), ack)
+			}
+			continue
 		case controlFrame := <-connection.Frames():
 			if connection.ended() {
 				return deviceStreamError(ErrControlDisconnected)
@@ -116,10 +125,20 @@ func (s *DeviceService) Connect(stream orbitv1.DeviceService_ConnectServer) erro
 			if delivery.DeviceId != connection.DeviceID || delivery.SessionEpoch != connection.SessionEpoch {
 				return status.Error(codes.FailedPrecondition, "assignment does not match the active device session")
 			}
+			if s.Faults != nil && s.Faults.ConsumeDeliveryDrop(connection.DeviceID) {
+				continue
+			}
 			if err := stream.Send(&orbitv1.ServerFrame{
 				Body: &orbitv1.ServerFrame_Command{Command: delivery},
 			}); err != nil {
 				return deviceStreamError(err)
+			}
+			if s.Faults != nil && s.Faults.ConsumeDuplicateDelivery(connection.DeviceID) {
+				if err := stream.Send(&orbitv1.ServerFrame{
+					Body: &orbitv1.ServerFrame_Command{Command: delivery},
+				}); err != nil {
+					return deviceStreamError(err)
+				}
 			}
 			if err := s.hub.ReportDeliveryStarted(stream.Context(), delivery); err != nil {
 				return deviceStreamError(err)

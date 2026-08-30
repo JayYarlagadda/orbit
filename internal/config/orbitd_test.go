@@ -7,19 +7,19 @@ import (
 
 func TestLoadOrbitd(t *testing.T) {
 	values := map[string]string{
-		"ORBIT_DATABASE_URL":             "postgres://orbit:secret@localhost/orbit",
-		"ORBIT_LISTEN_ADDRESS":           ":6000",
-		"ORBIT_SHUTDOWN_TIMEOUT":         "15s",
-		"ORBIT_DB_MAX_CONNECTIONS":       "24",
-		"ORBIT_GATEWAY_OUTBOUND_BUFFER":  "64",
-		"ORBIT_SCHEDULER_LEASE_BATCH":    "12",
-		"ORBIT_SCHEDULER_SWEEP_BATCH":    "20",
-		"ORBIT_SCHEDULER_LEASE_DURATION": "20s",
-		"ORBIT_SCHEDULER_POLL_INTERVAL":  "100ms",
-		"ORBIT_MAX_DELIVERY_ATTEMPTS":    "8",
-		"ORBIT_RETRY_BASE_DELAY":         "500ms",
-		"ORBIT_RETRY_MAX_DELAY":          "1m",
-		"ORBIT_GLOBAL_ADMISSION_LIMIT":   "5000",
+		"ORBIT_DATABASE_URL":               "postgres://orbit:secret@localhost/orbit",
+		"ORBIT_LISTEN_ADDRESS":             ":6000",
+		"ORBIT_SHUTDOWN_TIMEOUT":           "15s",
+		"ORBIT_DB_MAX_CONNECTIONS":         "24",
+		"ORBIT_GATEWAY_OUTBOUND_BUFFER":    "64",
+		"ORBIT_SCHEDULER_LEASE_BATCH":      "12",
+		"ORBIT_SCHEDULER_SWEEP_BATCH":      "20",
+		"ORBIT_SCHEDULER_LEASE_DURATION":   "20s",
+		"ORBIT_SCHEDULER_POLL_INTERVAL":    "100ms",
+		"ORBIT_MAX_DELIVERY_ATTEMPTS":      "8",
+		"ORBIT_RETRY_BASE_DELAY":           "500ms",
+		"ORBIT_RETRY_MAX_DELAY":            "1m",
+		"ORBIT_GLOBAL_ADMISSION_LIMIT":     "5000",
 		"ORBIT_PER_DEVICE_ADMISSION_LIMIT": "64",
 	}
 	got, err := LoadOrbitd(func(key string) (string, bool) {

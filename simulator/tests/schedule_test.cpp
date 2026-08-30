@@ -40,9 +40,24 @@ void offline_reconnect_matches_golden() {
   require(actual == golden_text, "offline reconnect schedule does not match the golden fixture");
 }
 
+void schedule_events_are_monotonic() {
+  const auto scenario_text = read_file("scenarios/examples/offline-reconnect.v1.json");
+  const auto scenario = load_scenario_json(scenario_text);
+  const auto schedule = compile_schedule(scenario);
+  for (std::size_t index = 1; index < schedule.events.size(); ++index) {
+    const auto& previous = schedule.events[index - 1];
+    const auto& current = schedule.events[index];
+    require(
+        current.at_ms > previous.at_ms ||
+            (current.at_ms == previous.at_ms && current.ordinal > previous.ordinal),
+        "schedule events must be monotonic by timestamp and ordinal");
+  }
+}
+
 }  // namespace
 
 int run_schedule_tests() {
   offline_reconnect_matches_golden();
+  schedule_events_are_monotonic();
   return EXIT_SUCCESS;
 }

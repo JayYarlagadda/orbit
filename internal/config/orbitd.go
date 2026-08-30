@@ -24,40 +24,40 @@ const (
 type LookupEnv func(string) (string, bool)
 
 type Orbitd struct {
-	ListenAddress          string
-	DatabaseURL            string
-	ShutdownTimeout        time.Duration
-	DBMaxConnections       int32
-	GatewayOutboundBuffer  int
-	SchedulerLeaseBatch    int
-	SchedulerSweepBatch    int
-	SchedulerLeaseDuration time.Duration
-	SchedulerPollInterval  time.Duration
-	HeartbeatInterval      time.Duration
-	HeartbeatTimeout       time.Duration
-	MaxDeliveryAttempts    int32
-	RetryBaseDelay         time.Duration
-	RetryMaxDelay          time.Duration
-	GlobalAdmissionLimit   int
+	ListenAddress           string
+	DatabaseURL             string
+	ShutdownTimeout         time.Duration
+	DBMaxConnections        int32
+	GatewayOutboundBuffer   int
+	SchedulerLeaseBatch     int
+	SchedulerSweepBatch     int
+	SchedulerLeaseDuration  time.Duration
+	SchedulerPollInterval   time.Duration
+	HeartbeatInterval       time.Duration
+	HeartbeatTimeout        time.Duration
+	MaxDeliveryAttempts     int32
+	RetryBaseDelay          time.Duration
+	RetryMaxDelay           time.Duration
+	GlobalAdmissionLimit    int
 	PerDeviceAdmissionLimit int
 }
 
 func LoadOrbitd(lookup LookupEnv) (Orbitd, error) {
 	config := Orbitd{
-		ListenAddress:          defaultListenAddress,
-		ShutdownTimeout:        defaultShutdown,
-		DBMaxConnections:       defaultMaxConnections,
-		GatewayOutboundBuffer:  defaultGatewayBuffer,
-		SchedulerLeaseBatch:    defaultLeaseBatch,
-		SchedulerSweepBatch:    defaultSweepBatch,
-		SchedulerLeaseDuration: defaultLeaseDuration,
-		SchedulerPollInterval:  defaultPollInterval,
-		HeartbeatInterval:      heartbeat.DefaultInterval,
-		HeartbeatTimeout:       heartbeat.DefaultTimeout,
-		MaxDeliveryAttempts:    command.DefaultMaxDeliveryAttempts,
-		RetryBaseDelay:         command.DefaultRetryBaseDelay,
-		RetryMaxDelay:          command.DefaultRetryMaxDelay,
-		GlobalAdmissionLimit:   command.DefaultGlobalAdmissionLimit,
+		ListenAddress:           defaultListenAddress,
+		ShutdownTimeout:         defaultShutdown,
+		DBMaxConnections:        defaultMaxConnections,
+		GatewayOutboundBuffer:   defaultGatewayBuffer,
+		SchedulerLeaseBatch:     defaultLeaseBatch,
+		SchedulerSweepBatch:     defaultSweepBatch,
+		SchedulerLeaseDuration:  defaultLeaseDuration,
+		SchedulerPollInterval:   defaultPollInterval,
+		HeartbeatInterval:       heartbeat.DefaultInterval,
+		HeartbeatTimeout:        heartbeat.DefaultTimeout,
+		MaxDeliveryAttempts:     command.DefaultMaxDeliveryAttempts,
+		RetryBaseDelay:          command.DefaultRetryBaseDelay,
+		RetryMaxDelay:           command.DefaultRetryMaxDelay,
+		GlobalAdmissionLimit:    command.DefaultGlobalAdmissionLimit,
 		PerDeviceAdmissionLimit: command.DefaultPerDeviceAdmissionLimit,
 	}
 
