@@ -1,0 +1,101 @@
+{
+  "schema_version": "1",
+  "benchmark_name": "b1-healthy-baseline-smoke",
+  "matrix_id": "B1",
+  "git_commit": "2a3b7fd376b0a02522a1d20804ba36946ede18aa",
+  "git_dirty": false,
+  "go_version": "go1.26.7",
+  "host": {
+    "os": "windows",
+    "arch": "amd64",
+    "hostname": "Jay",
+    "cpus": 8
+  },
+  "started_at": "2026-08-31T04:19:09.4943691Z",
+  "finished_at": "2026-08-31T04:20:28.8377319Z",
+  "configuration": {
+    "schema_version": "1",
+    "name": "b1-healthy-baseline-smoke",
+    "matrix_id": "B1",
+    "clients": 20,
+    "commands": 500,
+    "payload_bytes": 256,
+    "warmup_commands": 50,
+    "trials": 3,
+    "submit_concurrency": 16,
+    "priority": 4,
+    "expires_after_seconds": 3600,
+    "control_address": "127.0.0.1:50051",
+    "gateway_address": "127.0.0.1:50052",
+    "producer_id": "bench-producer",
+    "gateway_id": "gateway-bench",
+    "poll_interval_ms": 25,
+    "trial_timeout_seconds": 300
+  },
+  "trials": [
+    {
+      "trial": 1,
+      "commands_submitted": 500,
+      "commands_acknowledged": 500,
+      "duration_seconds": 25.0785809,
+      "throughput_ack_per_second": 19.937332259497985,
+      "latency_seconds": {
+        "p50": 13.1047193,
+        "p95": 24.479249215,
+        "p99": 25.086493242000003,
+        "max": 25.179252
+      }
+    },
+    {
+      "trial": 2,
+      "commands_submitted": 500,
+      "commands_acknowledged": 500,
+      "duration_seconds": 21.7018798,
+      "throughput_ack_per_second": 23.039478819710354,
+      "latency_seconds": {
+        "p50": 13.24483755,
+        "p95": 21.371778595,
+        "p99": 21.660608103,
+        "max": 21.872741
+      }
+    },
+    {
+      "trial": 3,
+      "commands_submitted": 500,
+      "commands_acknowledged": 500,
+      "duration_seconds": 19.9018762,
+      "throughput_ack_per_second": 25.123259484450013,
+      "latency_seconds": {
+        "p50": 11.55842095,
+        "p95": 19.573083325000002,
+        "p99": 19.909378069,
+        "max": 19.9684575
+      }
+    }
+  ],
+  "aggregate": {
+    "throughput_ack_per_second": {
+      "median": 23.039478819710354,
+      "min": 19.937332259497985,
+      "max": 25.123259484450013
+    },
+    "latency_seconds": {
+      "p50": {
+        "median": 13.1047193,
+        "min": 11.55842095,
+        "max": 13.24483755
+      },
+      "p95": {
+        "median": 21.371778595,
+        "min": 19.573083325000002,
+        "max": 24.479249215
+      },
+      "p99": {
+        "median": 21.660608103,
+        "min": 19.909378069,
+        "max": 25.086493242000003
+      }
+    }
+  },
+  "bottleneck_notes": "First bottleneck is typically PostgreSQL commit latency on submit and acknowledge paths under concurrent device load; gateway and client CPU remain secondary until admission limits or scheduler batch size saturate."
+}
