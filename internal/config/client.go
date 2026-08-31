@@ -12,6 +12,7 @@ import (
 
 const (
 	defaultClientGatewayAddress = "127.0.0.1:50052"
+	defaultClientMetricsAddress = "127.0.0.1:9093"
 	defaultClientStatePath      = "data/orbit-client-state.json"
 	defaultClientRetention      = 1024
 	defaultReconnectInitial     = 250 * time.Millisecond
@@ -24,6 +25,7 @@ type Client struct {
 	GatewayAddress        string
 	GatewayAddresses      []string
 	GatewayIndex          int
+	MetricsAddress        string
 	StatePath             string
 	DedupRetention        int
 	ReconnectInitialDelay time.Duration
@@ -39,6 +41,7 @@ type Client struct {
 func LoadClient(lookup LookupEnv) (Client, error) {
 	result := Client{
 		GatewayAddress:        defaultClientGatewayAddress,
+		MetricsAddress:        defaultClientMetricsAddress,
 		StatePath:             defaultClientStatePath,
 		DedupRetention:        defaultClientRetention,
 		ReconnectInitialDelay: defaultReconnectInitial,
@@ -76,6 +79,9 @@ func LoadClient(lookup LookupEnv) (Client, error) {
 			}
 			*target = value
 		}
+	}
+	if value, ok := lookup("ORBIT_METRICS_ADDRESS"); ok {
+		result.MetricsAddress = strings.TrimSpace(value)
 	}
 
 	if value, ok := lookup("ORBIT_CLIENT_GATEWAY_ADDRESSES"); ok {

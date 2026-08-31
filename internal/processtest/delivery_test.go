@@ -137,12 +137,12 @@ func TestGatewayClientProcessDedupsDuplicateDelivery(t *testing.T) {
 	statePath := filepath.Join(t.TempDir(), "state.json")
 
 	gatewayCmd := exec.Command(gatewayBinary)
-	gatewayCmd.Env = append(os.Environ(),
+	gatewayCmd.Env = withTelemetryOff(append(os.Environ(),
 		"ORBIT_GATEWAY_ID=gateway-dup",
 		"ORBIT_CONTROL_ADDRESS="+controlAddress,
 		"ORBIT_GATEWAY_LISTEN_ADDRESS="+listenAddress,
 		"ORBIT_GATEWAY_SHUTDOWN_TIMEOUT=2s",
-	)
+	))
 	gatewayCmd.Stdout = os.Stdout
 	gatewayCmd.Stderr = os.Stderr
 	prepareInterruptible(gatewayCmd)
@@ -154,11 +154,11 @@ func TestGatewayClientProcessDedupsDuplicateDelivery(t *testing.T) {
 
 	var clientLog logBuffer
 	clientCmd := exec.Command(clientBinary)
-	clientCmd.Env = append(os.Environ(),
+	clientCmd.Env = withTelemetryOff(append(os.Environ(),
 		"ORBIT_DEVICE_ID=edge-dup",
 		"ORBIT_CLIENT_GATEWAY_ADDRESS="+listenAddress,
 		"ORBIT_CLIENT_STATE_PATH="+statePath,
-	)
+	))
 	clientCmd.Stdout = &clientLog
 	clientCmd.Stderr = os.Stderr
 	prepareInterruptible(clientCmd)

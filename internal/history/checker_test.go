@@ -70,4 +70,18 @@ func TestCheckerDetectsCorruptedHistories(t *testing.T) {
 	if !foundINV08 {
 		t.Fatalf("expected INV-08 violation, got %+v", report.Violations)
 	}
+
+	expired := passing
+	expired.Commands[0].ExpiresAt = now
+	expired.Attempts = []DeliveryAttempt{
+		{
+			CommandID: "cmd-1",
+			DeviceID:  "device-a",
+			StartedAt: now.Add(time.Second),
+			Outcome:   "LEASED",
+		},
+	}
+	if report := Check(expired); report.Passed || report.Violations[0].Invariant != InvNoDeliveryAfterExpiry {
+		t.Fatalf("expected INV-04 violation, got %+v", report)
+	}
 }

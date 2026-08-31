@@ -59,6 +59,7 @@ evidence remain required.
 | INV-01 | Closed command transition table; ACK terminal-state database update | Corrupted-history checker test |
 | INV-02 | Durable client state applies a retained command ID once across reopen; process tests send a duplicate assignment and a lost-ACK reconnect; scenario runner records client applications | Scenario history checker on corrupted fixtures |
 | INV-03 | PostgreSQL leases only the earliest non-terminal device sequence | Multi-command device process test |
+| INV-04 | Expiry sweep and lease selection integration tests | History checker on post-expiry delivery attempts |
 | INV-05 | Stale lease token and stale/mismatched session epoch integration tests | Paused-worker process scenario |
 | INV-06 | Submit plus forced audit-failure rollback integration test | API failure injection scenario |
 | INV-07 | Matching and conflicting idempotency integration tests | Concurrent duplicate producer test |

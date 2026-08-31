@@ -1,6 +1,6 @@
 # Current Status
 
-Last reconciled: 2026-08-29.
+Last reconciled: 2026-08-30.
 
 This document is the implementation handoff ledger. The project brief describes
 why Orbit is worth building, the system design describes intended behavior, and
@@ -16,7 +16,8 @@ this file records what actually exists and what has been verified.
 | M3 recovery | Complete locally | Retry/backoff, dead letter, admission limits, gateway-control reconnect, lease/TTL recovery, `orbitd` graceful shutdown test, and online smoke with mid-run `orbitd` restart (CI + `scripts/smoke-online.ps1`) |
 | M4 replay | Complete locally | SplitMix64 schedule compiler, gateway logical fault injection, scenario runner, history collector/checker, golden schedule fixture, and online-smoke closed-loop run |
 | M5 failover | Complete locally | Dual-gateway deployment, client gateway selection/failover, gateway-crash scenario playbooks, INV-05/INV-08 history checks, and failure artifacts |
-| M6-M7 | Not started | No telemetry stack, benchmark results, or release evidence |
+| M6 observability | Complete locally | Prometheus metrics on orbitd/gateway/client, OTLP traces, Compose Prometheus/Grafana/Jaeger, bounded-label tests, and `docs/operations.md` triage guide |
+| M7 release | Complete locally | B0 benchmark harness, committed `summary.json`, `docs/release.md`, `verify-release` |
 
 ## Implemented
 
@@ -62,6 +63,15 @@ this file records what actually exists and what has been verified.
 - Reference-client state library with payload-hash validation, atomic Windows
   file replacement, bounded retained command IDs, persist-before-ACK behavior,
   duplicate suppression, and device stream session logic.
+- Bounded Prometheus metrics (`internal/metrics`) on orbitd, gateway, and client
+  with queue depth, delivery latency, lease expiry, stale-token rejects,
+  admission limits, session gauges, and reconnect counters.
+- OpenTelemetry traces (`internal/telemetry`) with correlation across submit,
+  lease, deliver, ack, gateway control reconnect, and client session spans.
+- Docker Compose stack with PostgreSQL, Prometheus, Grafana (provisioned
+  **Orbit overview** dashboard), and Jaeger OTLP collector.
+- Operations guide (`docs/operations.md`) for triaging failures from metrics,
+  traces, and `history.json`.
 
 ## Verified locally
 
@@ -136,16 +146,21 @@ M5 failover is closed in code and CI: the scenario runner deploys every gateway
 in a scenario topology, the client rotates through gateway addresses on reconnect,
 and dual-gateway plus gateway-crash playbooks pass the expanded history checker.
 
-The next implementation unit is **M6 observability**: metrics, traces, dashboards,
-and failure-triage evidence.
+M6 observability is closed locally: all three processes export `/metrics`,
+OTLP traces land in Jaeger, Grafana panels cover the M6 contract, and
+`docs/operations.md` documents the gateway-crash triage gate.
 
-No performance, scale, or release benchmark claim is justified yet.
+M7 release evidence is closed locally: the B0 harness is pinned, results are
+committed under `docs/results/`, and `scripts/verify-release.ps1` validates the
+artifact contract.
+
+Portfolio reviewers can clone the repository and follow `scripts/demo-release.ps1`.
 
 ## Open work
 
-- Start **M6**: Prometheus metrics, OpenTelemetry traces, and Grafana dashboards.
-- Extend checker coverage for remaining invariants (INV-04, INV-06, INV-07, INV-10–INV-12).
-- Extend Compose beyond PostgreSQL after observability wiring lands.
+- Optional: extend benchmark matrix to B1–B6 and publish additional results.
+- Extend checker coverage for remaining invariants (INV-06, INV-07, INV-10–INV-12).
+  INV-04 (no delivery after expiry) is now checked from `delivery_attempts`.
 
 ## Known limitations
 
@@ -154,7 +169,7 @@ No performance, scale, or release benchmark claim is justified yet.
   the terminal expiration sweep, but expiry is only observed when a scheduler
   cycle runs, so a device with no connected gateway keeps its expired commands
   until one does.
-- No telemetry pipeline, dashboards, release benchmark, or Kubernetes deployment exists.
+- No Kubernetes deployment exists.
 - Remote CI should be confirmed green on GitHub after the latest push.
 
 ## Safe resume sequence
@@ -167,3 +182,5 @@ No performance, scale, or release benchmark claim is justified yet.
    and confirm the golden schedule test passes.
 5. Run `go run ./cmd/scenario-run -scenario scenarios/examples/online-smoke.v1.json`
    with `ORBIT_DATABASE_URL` set to execute a closed-loop scenario.
+6. Start `deployments/compose` (Prometheus, Grafana, Jaeger) and follow
+   `docs/operations.md` to validate metrics and traces during a scenario run.

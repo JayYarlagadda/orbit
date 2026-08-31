@@ -12,6 +12,7 @@ import (
 
 const (
 	defaultListenAddress  = "127.0.0.1:50051"
+	defaultMetricsAddress = "127.0.0.1:9090"
 	defaultShutdown       = 10 * time.Second
 	defaultMaxConnections = int32(10)
 	defaultGatewayBuffer  = 128
@@ -25,6 +26,7 @@ type LookupEnv func(string) (string, bool)
 
 type Orbitd struct {
 	ListenAddress           string
+	MetricsAddress          string
 	DatabaseURL             string
 	ShutdownTimeout         time.Duration
 	DBMaxConnections        int32
@@ -45,6 +47,7 @@ type Orbitd struct {
 func LoadOrbitd(lookup LookupEnv) (Orbitd, error) {
 	config := Orbitd{
 		ListenAddress:           defaultListenAddress,
+		MetricsAddress:          defaultMetricsAddress,
 		ShutdownTimeout:         defaultShutdown,
 		DBMaxConnections:        defaultMaxConnections,
 		GatewayOutboundBuffer:   defaultGatewayBuffer,
@@ -66,6 +69,10 @@ func LoadOrbitd(lookup LookupEnv) (Orbitd, error) {
 	}
 	if config.ListenAddress == "" {
 		return Orbitd{}, fmt.Errorf("ORBIT_LISTEN_ADDRESS must not be empty")
+	}
+
+	if value, ok := lookup("ORBIT_METRICS_ADDRESS"); ok {
+		config.MetricsAddress = strings.TrimSpace(value)
 	}
 
 	value, ok := lookup("ORBIT_DATABASE_URL")

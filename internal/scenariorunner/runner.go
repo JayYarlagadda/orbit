@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/JayYarlagadda/orbit/internal/config"
 	"github.com/JayYarlagadda/orbit/internal/history"
 	"github.com/JayYarlagadda/orbit/internal/scenario"
 	"github.com/JayYarlagadda/orbit/internal/storage/migrate"
@@ -132,7 +133,7 @@ func (r *Runner) Run(ctx context.Context) (Result, error) {
 	processes := &processGroup{}
 	defer processes.stopAll()
 
-	commonEnv := []string{
+	commonEnv := append([]string{
 		"ORBIT_DATABASE_URL=" + r.config.DatabaseURL,
 		"ORBIT_CONTROL_ADDRESS=" + controlAddress,
 		"ORBIT_DEVICE_ID=" + deviceID,
@@ -140,13 +141,13 @@ func (r *Runner) Run(ctx context.Context) (Result, error) {
 		"ORBIT_CLIENT_GATEWAY_ADDRESS=" + orderedGatewayAddresses[0],
 		"ORBIT_CLIENT_GATEWAY_INDEX=0",
 		"ORBIT_CLIENT_STATE_PATH=" + statePath,
-		"ORBIT_CLIENT_MAX_RECONNECT_ATTEMPTS=5",
+		"ORBIT_CLIENT_MAX_RECONNECT_ATTEMPTS=0",
 		"ORBIT_GATEWAY_MAX_RECONNECT_ATTEMPTS=0",
 		"ORBIT_GATEWAY_RECONNECT_INITIAL_DELAY=50ms",
 		"ORBIT_GATEWAY_RECONNECT_MAX_DELAY=1s",
 		"ORBIT_GATEWAY_FAULT_SCHEDULE_PATH=" + schedulePath,
 		"ORBIT_SCENARIO_STARTED_AT=" + startedAt.Format(time.RFC3339Nano),
-	}
+	}, config.TelemetryDisabledEnv()...)
 
 	if err := processes.start("orbitd", r.config.Binaries.Orbitd, append(commonEnv,
 		"ORBIT_LISTEN_ADDRESS="+controlAddress,
@@ -238,7 +239,11 @@ func (r *Runner) runPlaybook(ctx context.Context, playbook playbookContext) erro
 		_, err := submitAndWaitAcknowledged(ctx, r.config.Binaries.Orbitctl, playbook.controlAddress, playbook.deviceID, "online-smoke-1")
 		return err
 	case "offline-reconnect":
-		return retrySubmitUntilAcknowledged(ctx, r.config.Timeout, r.config.Binaries.Orbitctl, playbook.controlAddress, playbook.deviceID, "offline-reconnect-1")
+		if err := waitPlaybookDelay(ctx, 28*time.Second); err != nil {
+			return err
+		}
+		_, err := submitAndWaitAcknowledged(ctx, r.config.Binaries.Orbitctl, playbook.controlAddress, playbook.deviceID, "offline-reconnect-1")
+		return err
 	case "dual-gateway-session":
 		if err := waitPlaybookDelay(ctx, 5*time.Second); err != nil {
 			return err
@@ -326,11 +331,25 @@ func (r *Runner) runLifecycle(
 				AtMS: event.AtMS, Component: "client", Action: "stopped", Detail: event.DeviceID,
 			})
 		case "device_reconnect":
-			if processes.running("client") {
-				continue
-			}
+			processes.stop("client")
 			env := processes.envFor("client")
+			for _, gatewayID := range topologyGateways {
+				if !processes.running(gatewayID) {
+					continue
+				}
+				address := gatewayAddresses[gatewayID]
+				index, err := gatewayIndex(topologyGateways, gatewayID)
+				if err != nil {
+					return err
+				}
+				env = setEnvVar(env, "ORBIT_CLIENT_GATEWAY_ADDRESS", address)
+				env = setEnvVar(env, "ORBIT_CLIENT_GATEWAY_INDEX", strconv.Itoa(index))
+				break
+			}
 			if err := processes.start("client", r.config.Binaries.Client, env, r.config.WorkDir); err != nil {
+				return err
+			}
+			if err := waitForFile(ctx, clientStatePath, 20*time.Second); err != nil {
 				return err
 			}
 			*lifecycle = append(*lifecycle, history.LifecycleEvent{

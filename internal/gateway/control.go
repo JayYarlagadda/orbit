@@ -12,6 +12,8 @@ import (
 	orbitv1 "github.com/JayYarlagadda/orbit/gen/orbit/v1"
 	"github.com/JayYarlagadda/orbit/internal/backoff"
 	"github.com/JayYarlagadda/orbit/internal/heartbeat"
+	"github.com/JayYarlagadda/orbit/internal/metrics"
+	"github.com/JayYarlagadda/orbit/internal/telemetry"
 )
 
 // healthyControlStream is how long a control stream must last before the
@@ -60,12 +62,22 @@ func RunControl(
 
 	for attempt := 0; ; attempt++ {
 		if attempt > 0 {
+			metrics.RecordGatewayControlReconnect()
+			reconnectCtx, reconnectSpan := telemetry.Start(
+				ctx,
+				"orbit.gateway.control.reconnect",
+				telemetry.ReconnectAttempt(attempt),
+			)
+			_ = reconnectCtx
+			telemetry.End(reconnectSpan, nil)
 			// Drop the previous stream's device sessions before opening a new
 			// one, so devices re-register for epochs the control plane knows.
 			hub.Rebind()
 		}
 		startedAt := time.Now()
-		streamErr := RunControlStream(ctx, client, hub, config.GatewayInstanceID, config.Heartbeat)
+		streamCtx, streamSpan := telemetry.Start(ctx, "orbit.gateway.control.stream")
+		streamErr := RunControlStream(streamCtx, client, hub, config.GatewayInstanceID, config.Heartbeat)
+		telemetry.End(streamSpan, streamErr)
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}

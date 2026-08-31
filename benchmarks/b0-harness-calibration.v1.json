@@ -1,0 +1,20 @@
+{
+  "$schema": "./schema/v1/benchmark.schema.json",
+  "schema_version": "1",
+  "name": "b0-harness-calibration",
+  "matrix_id": "B0",
+  "clients": 50,
+  "commands": 5000,
+  "payload_bytes": 64,
+  "warmup_commands": 100,
+  "trials": 5,
+  "submit_concurrency": 32,
+  "priority": 4,
+  "expires_after_seconds": 3600,
+  "control_address": "127.0.0.1:50051",
+  "gateway_address": "127.0.0.1:50052",
+  "producer_id": "bench-producer",
+  "gateway_id": "gateway-bench",
+  "poll_interval_ms": 25,
+  "trial_timeout_seconds": 900
+}

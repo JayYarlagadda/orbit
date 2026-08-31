@@ -11,8 +11,10 @@ import (
 	orbitv1 "github.com/JayYarlagadda/orbit/gen/orbit/v1"
 	"github.com/JayYarlagadda/orbit/internal/command"
 	"github.com/JayYarlagadda/orbit/internal/heartbeat"
+	"github.com/JayYarlagadda/orbit/internal/metrics"
 	"github.com/JayYarlagadda/orbit/internal/scheduler"
 	"github.com/JayYarlagadda/orbit/internal/session"
+	"github.com/JayYarlagadda/orbit/internal/telemetry"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -52,6 +54,10 @@ func New(store Store, config Config) (*Service, error) {
 }
 
 func (s *Service) Connect(stream orbitv1.GatewayControlService_ConnectServer) error {
+	ctx, span := telemetry.Start(stream.Context(), "orbit.gateway.control.stream")
+	var connectErr error
+	defer func() { telemetry.End(span, connectErr) }()
+
 	first, err := stream.Recv()
 	if err != nil {
 		return mapStreamError(err)
@@ -62,8 +68,12 @@ func (s *Service) Connect(stream orbitv1.GatewayControlService_ConnectServer) er
 	}
 	gatewayID, err := session.NormalizeIdentifier("gateway_id", hello.GatewayId)
 	if err != nil {
-		return status.Error(codes.InvalidArgument, err.Error())
+		connectErr = status.Error(codes.InvalidArgument, err.Error())
+		return connectErr
 	}
+	span.SetAttributes(telemetry.GatewayID(gatewayID))
+	metrics.IncGatewayControlStreams()
+	defer metrics.DecGatewayControlStreams()
 	if _, err := session.NormalizeIdentifier("gateway_instance_id", hello.GatewayInstanceId); err != nil {
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
@@ -219,8 +229,9 @@ func (s *Service) handleFrame(
 		return nil
 	}
 	if started := frame.GetDeliveryStarted(); started != nil {
+		deliveryCtx, deliverySpan := telemetry.Start(ctx, "orbit.command.deliver", telemetry.CommandID(started.CommandId))
 		_, err := s.store.MarkInFlight(
-			ctx,
+			deliveryCtx,
 			started.CommandId,
 			gatewayID,
 			started.LeaseToken,
@@ -228,8 +239,13 @@ func (s *Service) handleFrame(
 			"delivery-started:"+started.CommandId,
 		)
 		if err != nil {
+			if errors.Is(err, command.ErrStaleLease) {
+				_ = metrics.RecordStaleLeaseRejection(metrics.StaleLeaseOperationInFlight)
+			}
+			telemetry.End(deliverySpan, err)
 			return mapStoreError(err)
 		}
+		telemetry.End(deliverySpan, nil)
 		return nil
 	}
 	if ackFrame := frame.GetCommandAck(); ackFrame != nil {
@@ -258,9 +274,15 @@ func (s *Service) handleFrame(
 		if err != nil {
 			return status.Error(codes.InvalidArgument, err.Error())
 		}
-		if _, err := s.store.Acknowledge(ctx, acknowledgement, "ack:"+ack.CommandId); err != nil {
+		ackCtx, ackSpan := telemetry.Start(ctx, "orbit.command.ack", telemetry.CommandID(ack.CommandId))
+		if _, err := s.store.Acknowledge(ackCtx, acknowledgement, "ack:"+ack.CommandId); err != nil {
+			if errors.Is(err, command.ErrStaleLease) {
+				_ = metrics.RecordStaleLeaseRejection(metrics.StaleLeaseOperationAcknowledge)
+			}
+			telemetry.End(ackSpan, err)
 			return mapStoreError(err)
 		}
+		telemetry.End(ackSpan, nil)
 		return nil
 	}
 	return status.Error(codes.InvalidArgument, "unsupported gateway frame")

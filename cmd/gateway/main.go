@@ -16,7 +16,9 @@ import (
 	"github.com/JayYarlagadda/orbit/internal/faultschedule"
 	"github.com/JayYarlagadda/orbit/internal/gateway"
 	"github.com/JayYarlagadda/orbit/internal/heartbeat"
+	"github.com/JayYarlagadda/orbit/internal/metrics"
 	"github.com/JayYarlagadda/orbit/internal/shutdownsignal"
+	"github.com/JayYarlagadda/orbit/internal/telemetry"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
@@ -38,12 +40,24 @@ func run(logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	telemetrySettings := config.LoadTelemetry(os.LookupEnv, "orbit-gateway")
+	rootContext, stopSignals := shutdownsignal.NotifyContext(context.Background())
+	defer stopSignals()
+
+	telemetryProvider, err := telemetry.Init(rootContext, telemetry.Config{
+		ServiceName:  telemetrySettings.ServiceName,
+		OTLPEndpoint: telemetrySettings.OTLPEndpoint,
+		Enabled:      telemetrySettings.Enabled,
+	})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = telemetryProvider.Shutdown(rootContext) }()
+
 	instanceID, err := randomID()
 	if err != nil {
 		return err
 	}
-	rootContext, stopSignals := shutdownsignal.NotifyContext(context.Background())
-	defer stopSignals()
 
 	hub, err := gateway.NewHub(gateway.HubConfig{
 		GatewayID:        settings.GatewayID,
@@ -120,11 +134,17 @@ func run(logger *slog.Logger) error {
 	go func() { serveErrors <- server.Serve(listener) }()
 	logger.Info("gateway listening", "gateway_id", settings.GatewayID, "address", listener.Addr().String())
 
+	metricsErrors := make(chan error, 1)
+	go func() {
+		metricsErrors <- metrics.Serve(rootContext, settings.MetricsAddress, logger, "gateway")
+	}()
+
 	var runError error
 	select {
 	case <-rootContext.Done():
 	case runError = <-controlErrors:
 	case runError = <-serveErrors:
+	case runError = <-metricsErrors:
 	}
 	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_NOT_SERVING)
 	logger.Info("gateway draining", "timeout", settings.ShutdownTimeout.String())
@@ -141,6 +161,9 @@ func run(logger *slog.Logger) error {
 	case <-timer.C:
 		server.Stop()
 		<-drained
+	}
+	if err := <-metricsErrors; err != nil && runError == nil {
+		runError = err
 	}
 	return runError
 }

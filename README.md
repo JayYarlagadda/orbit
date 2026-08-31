@@ -5,16 +5,10 @@ edge devices. It is designed to demonstrate distributed-systems correctness,
 failure recovery, deterministic fault replay, and measured performance rather
 than simply assembling a large infrastructure stack.
 
-Status: Phase 1 is complete and Phase 2 is in progress. The durable command API
-has been exercised through real gRPC against PostgreSQL 18.6. Ordered leasing,
-lease-token and session-epoch fencing, lease recovery, terminal command
-expiration, ACK persistence, the gateway-control stream, the standalone gateway,
-and the reference client are implemented. A single command has been carried from
-a producer to a device and back to durable `ACKNOWLEDGED` across separate
-processes. The gateway reconnects to the control plane after an `orbitd`
-restart. Failure-path process tests and the Phase 2 shutdown/soak gates remain
-pending. See [current status](docs/current-status.md) for exact evidence and
-open work.
+Status: M0–M6 are complete locally. The durable command API, delivery path,
+failover scenarios, observability stack, and B0 benchmark harness are implemented
+and verified. See [current status](docs/current-status.md) and
+[release evidence](docs/release.md) for exact claims and artifacts.
 
 ## Project thesis
 
@@ -50,6 +44,10 @@ services, and a history checker verifies the documented guarantees.
   validation limits, environment variables, and local command workflow.
 - [Current status](docs/current-status.md): implemented surfaces, verification
   evidence, known gaps, local environment state, and the next safe work item.
+- [Release evidence](docs/release.md): claim-to-evidence table and benchmark
+  references.
+- [Operations guide](docs/operations.md): triage failures from metrics, traces,
+  and scenario history.
 
 ## Stack
 
@@ -103,4 +101,12 @@ To run the whole delivery path as separate processes and assert the durable
 
 ```powershell
 ./scripts/smoke-online.ps1
+```
+
+Release verification and portfolio demo:
+
+```powershell
+./scripts/verify-release.ps1   # foundation + benchmark artifact checks
+./scripts/demo-release.ps1       # smoke + online-smoke scenario
+./scripts/benchmark-b0.ps1       # regenerate B0 results (long-running)
 ```

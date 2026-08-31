@@ -1,0 +1,114 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "id": 1,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}},
+      "targets": [
+        {"expr": "sum(rate(orbit_commands_submitted_total[1m]))", "legendFormat": "submitted", "refId": "A"},
+        {"expr": "sum(rate(orbit_commands_leased_total[1m]))", "legendFormat": "leased", "refId": "B"},
+        {"expr": "sum(rate(orbit_commands_acknowledged_total[1m]))", "legendFormat": "acknowledged", "refId": "C"}
+      ],
+      "title": "Command throughput",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "id": 2,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}},
+      "targets": [
+        {"expr": "sum(orbit_queue_depth) by (state)", "legendFormat": "{{state}}", "refId": "A"}
+      ],
+      "title": "Queue depth by state",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "id": 3,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(orbit_command_delivery_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p99",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(orbit_command_delivery_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p50",
+          "refId": "B"
+        }
+      ],
+      "title": "Delivery latency (create to ack)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "id": 4,
+      "targets": [
+        {"expr": "sum(rate(orbit_lease_expirations_total[5m])) by (outcome)", "legendFormat": "{{outcome}}", "refId": "A"},
+        {"expr": "sum(rate(orbit_stale_lease_rejections_total[5m])) by (operation)", "legendFormat": "stale {{operation}}", "refId": "B"}
+      ],
+      "title": "Lease expiry and stale-token rejects",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+      "id": 5,
+      "targets": [
+        {"expr": "sum(rate(orbit_commands_admission_rejected_total[5m])) by (reason)", "legendFormat": "{{reason}}", "refId": "A"}
+      ],
+      "title": "Admission rejects",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+      "id": 6,
+      "targets": [
+        {"expr": "sum(orbit_gateway_control_streams_active)", "legendFormat": "control streams", "refId": "A"},
+        {"expr": "sum(orbit_gateway_device_sessions_active)", "legendFormat": "device sessions", "refId": "B"},
+        {"expr": "sum(orbit_client_sessions_active)", "legendFormat": "client sessions", "refId": "C"}
+      ],
+      "title": "Active sessions",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24},
+      "id": 7,
+      "targets": [
+        {"expr": "sum(rate(orbit_gateway_control_reconnects_total[5m]))", "legendFormat": "gateway control reconnects", "refId": "A"},
+        {"expr": "sum(rate(orbit_client_reconnects_total[5m])) by (reason)", "legendFormat": "client {{reason}}", "refId": "B"}
+      ],
+      "title": "Reconnect and failover",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": ["orbit", "m6"],
+  "time": {"from": "now-30m", "to": "now"},
+  "timezone": "browser",
+  "title": "Orbit overview",
+  "uid": "orbit-overview",
+  "version": 2
+}

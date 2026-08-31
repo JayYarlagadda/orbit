@@ -10,6 +10,7 @@ import (
 
 	orbitv1 "github.com/JayYarlagadda/orbit/gen/orbit/v1"
 	"github.com/JayYarlagadda/orbit/internal/command"
+	"github.com/JayYarlagadda/orbit/internal/telemetry"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -76,15 +77,25 @@ func (s *Service) SubmitCommand(ctx context.Context, request *orbitv1.SubmitComm
 	if err != nil {
 		return nil, status.Error(codes.Internal, "could not create request correlation ID")
 	}
-	stored, _, err := s.store.Submit(
+	ctx, span := telemetry.Start(
+		ctx,
+		"orbit.command.submit",
+		telemetry.CorrelationID(requestCorrelationID),
+		telemetry.DeviceID(submission.DeviceID),
+	)
+	var submitErr error
+	defer func() { telemetry.End(span, submitErr) }()
+
+	stored, _, submitErr := s.store.Submit(
 		ctx,
 		submission,
 		"producer:"+submission.ProducerID,
 		requestCorrelationID,
 	)
-	if err != nil {
-		return nil, mapError(err)
+	if submitErr != nil {
+		return nil, mapError(submitErr)
 	}
+	span.SetAttributes(telemetry.CommandID(stored.ID))
 	return toProto(stored), nil
 }
 

@@ -55,7 +55,7 @@ func TestOnlineSmokePathWithOrbitdRestart(t *testing.T) {
 		return cmd
 	}
 
-	commonEnv := []string{
+	commonEnv := withTelemetryOff([]string{
 		"ORBIT_DATABASE_URL=" + databaseURL,
 		"ORBIT_GATEWAY_ID=gateway-smoke",
 		"ORBIT_CONTROL_ADDRESS=" + controlAddress,
@@ -67,7 +67,7 @@ func TestOnlineSmokePathWithOrbitdRestart(t *testing.T) {
 		"ORBIT_GATEWAY_MAX_RECONNECT_ATTEMPTS=0",
 		"ORBIT_GATEWAY_RECONNECT_INITIAL_DELAY=50ms",
 		"ORBIT_GATEWAY_RECONNECT_MAX_DELAY=1s",
-	}
+	})
 
 	orbitd := startProcess(t, "orbitd", orbitdBinary, append(commonEnv,
 		"ORBIT_LISTEN_ADDRESS="+controlAddress,

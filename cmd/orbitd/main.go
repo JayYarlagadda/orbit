@@ -13,8 +13,10 @@ import (
 	"github.com/JayYarlagadda/orbit/internal/command"
 	"github.com/JayYarlagadda/orbit/internal/config"
 	"github.com/JayYarlagadda/orbit/internal/heartbeat"
+	"github.com/JayYarlagadda/orbit/internal/metrics"
 	"github.com/JayYarlagadda/orbit/internal/shutdownsignal"
 	"github.com/JayYarlagadda/orbit/internal/storage/postgres"
+	"github.com/JayYarlagadda/orbit/internal/telemetry"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
@@ -35,9 +37,20 @@ func run(logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	telemetrySettings := config.LoadTelemetry(os.LookupEnv, "orbitd")
 
 	rootContext, stopSignals := shutdownsignal.NotifyContext(context.Background())
 	defer stopSignals()
+
+	telemetryProvider, err := telemetry.Init(rootContext, telemetry.Config{
+		ServiceName:  telemetrySettings.ServiceName,
+		OTLPEndpoint: telemetrySettings.OTLPEndpoint,
+		Enabled:      telemetrySettings.Enabled,
+	})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = telemetryProvider.Shutdown(rootContext) }()
 
 	pool, err := postgres.Open(rootContext, settings.DatabaseURL, settings.DBMaxConnections)
 	if err != nil {
@@ -92,8 +105,15 @@ func run(logger *slog.Logger) error {
 	}()
 	logger.Info("orbitd listening", "address", listener.Addr().String())
 
+	metricsErrors := make(chan error, 1)
+	go func() {
+		metricsErrors <- metrics.Serve(rootContext, settings.MetricsAddress, logger, "orbitd")
+	}()
+
 	select {
 	case err := <-serveErrors:
+		return err
+	case err := <-metricsErrors:
 		return err
 	case <-rootContext.Done():
 		healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_NOT_SERVING)
@@ -114,6 +134,9 @@ func run(logger *slog.Logger) error {
 		logger.Warn("orbitd drain deadline exceeded")
 		server.Stop()
 		<-drained
+	}
+	if err := <-metricsErrors; err != nil {
+		return err
 	}
 	return nil
 }

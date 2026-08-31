@@ -127,5 +127,7 @@ jobs:
             echo "::error::the invalid scenario fixture was accepted" >&2
             exit 1
           fi
+      - name: Verify benchmark config
+        run: go run ./cmd/benchmark-check ./benchmarks/b0-harness-calibration.v1.json
       - name: Check whitespace errors
         run: git diff --check

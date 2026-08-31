@@ -3,12 +3,14 @@ package history
 import (
 	"fmt"
 	"sort"
+	"time"
 )
 
 const (
 	InvAcknowledgedTerminal = "INV-01"
 	InvOneApplication       = "INV-02"
 	InvDeviceOrder          = "INV-03"
+	InvNoDeliveryAfterExpiry = "INV-04"
 	InvFencingMonotonicity  = "INV-05"
 	InvSingleActiveSession  = "INV-08"
 	InvTerminalUnblocks     = "INV-09"
@@ -30,6 +32,7 @@ func Check(record Record) Report {
 	violations = append(violations, checkAcknowledgedTerminal(record)...)
 	violations = append(violations, checkOneApplication(record)...)
 	violations = append(violations, checkDeviceOrder(record)...)
+	violations = append(violations, checkNoDeliveryAfterExpiry(record)...)
 	violations = append(violations, checkFencingMonotonicity(record)...)
 	violations = append(violations, checkSingleActiveSession(record)...)
 	violations = append(violations, checkTerminalUnblocks(record)...)
@@ -100,6 +103,35 @@ func checkDeviceOrder(record Record) []Violation {
 					),
 				}}
 			}
+		}
+	}
+	return nil
+}
+
+func checkNoDeliveryAfterExpiry(record Record) []Violation {
+	expiresAt := make(map[string]time.Time, len(record.Commands))
+	for _, command := range record.Commands {
+		if command.ExpiresAt.IsZero() {
+			continue
+		}
+		expiresAt[command.ID] = command.ExpiresAt
+	}
+	for index, attempt := range record.Attempts {
+		deadline, ok := expiresAt[attempt.CommandID]
+		if !ok || deadline.IsZero() {
+			continue
+		}
+		if attempt.StartedAt.After(deadline) {
+			return []Violation{{
+				Invariant: InvNoDeliveryAfterExpiry,
+				Message: fmt.Sprintf(
+					"command %s delivery attempt started at %s after expiry %s",
+					attempt.CommandID,
+					attempt.StartedAt.UTC().Format(time.RFC3339Nano),
+					deadline.UTC().Format(time.RFC3339Nano),
+				),
+				Position: index,
+			}}
 		}
 	}
 	return nil

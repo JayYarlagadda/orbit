@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/JayYarlagadda/orbit/internal/command"
+	"github.com/JayYarlagadda/orbit/internal/metrics"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -105,6 +106,7 @@ func (s *CommandStore) Submit(
 		if err := tx.Commit(ctx); err != nil {
 			return command.Command{}, false, fmt.Errorf("commit idempotent lookup: %w", err)
 		}
+		_ = metrics.RecordCommandSubmitted(metrics.SubmittedResultIdempotent)
 		return existing, false, nil
 	case !errors.Is(err, command.ErrNotFound):
 		return command.Command{}, false, err
@@ -131,6 +133,7 @@ func (s *CommandStore) Submit(
 		return command.Command{}, false, fmt.Errorf("count global outstanding commands: %w", err)
 	}
 	if globalOutstanding >= s.admission.GlobalMax {
+		_ = metrics.RecordAdmissionRejected(metrics.AdmissionReasonGlobal)
 		return command.Command{}, false, command.ErrAdmissionLimited
 	}
 	var deviceOutstanding int
@@ -141,6 +144,7 @@ func (s *CommandStore) Submit(
 		return command.Command{}, false, fmt.Errorf("count device outstanding commands: %w", err)
 	}
 	if deviceOutstanding >= s.admission.PerDeviceMax {
+		_ = metrics.RecordAdmissionRejected(metrics.AdmissionReasonPerDevice)
 		return command.Command{}, false, command.ErrAdmissionLimited
 	}
 
@@ -198,6 +202,7 @@ func (s *CommandStore) Submit(
 	if err := tx.Commit(ctx); err != nil {
 		return command.Command{}, false, fmt.Errorf("commit submit transaction: %w", err)
 	}
+	_ = metrics.RecordCommandSubmitted(metrics.SubmittedResultCreated)
 	return created, true, nil
 }
 
@@ -403,6 +408,7 @@ func (s *CommandStore) LeaseNext(
 			return nil, fmt.Errorf("insert delivery attempt: %w", err)
 		}
 		leased = append(leased, command.Lease{Command: result, SessionEpoch: candidate.sessionEpoch})
+		metrics.RecordCommandLeased()
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -457,6 +463,7 @@ func (s *CommandStore) MarkInFlight(
 		now,
 	))
 	if errors.Is(err, pgx.ErrNoRows) {
+		_ = metrics.RecordStaleLeaseRejection(metrics.StaleLeaseOperationInFlight)
 		return command.Command{}, command.ErrStaleLease
 	}
 	if err != nil {
@@ -580,6 +587,7 @@ func (s *CommandStore) SweepExpiredLeases(ctx context.Context, limit int, correl
 			); err != nil {
 				return 0, fmt.Errorf("insert dead-letter audit event: %w", err)
 			}
+			_ = metrics.RecordLeaseExpiration(metrics.LeaseExpiryOutcomeDeadLetter)
 			continue
 		}
 
@@ -631,6 +639,7 @@ func (s *CommandStore) SweepExpiredLeases(ctx context.Context, limit int, correl
 		); err != nil {
 			return 0, fmt.Errorf("insert expired lease audit event: %w", err)
 		}
+		_ = metrics.RecordLeaseExpiration(metrics.LeaseExpiryOutcomeRetryWait)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -748,6 +757,7 @@ func (s *CommandStore) SweepExpiredCommands(ctx context.Context, limit int, corr
 	if err := tx.Commit(ctx); err != nil {
 		return 0, fmt.Errorf("commit command expiry transaction: %w", err)
 	}
+	metrics.RecordCommandExpired(len(expired))
 	return len(expired), nil
 }
 
@@ -818,6 +828,7 @@ func (s *CommandStore) Acknowledge(
 		if getErr != nil && !errors.Is(getErr, pgx.ErrNoRows) {
 			return command.Command{}, fmt.Errorf("check duplicate acknowledgement: %w", getErr)
 		}
+		_ = metrics.RecordStaleLeaseRejection(metrics.StaleLeaseOperationAcknowledge)
 		return command.Command{}, command.ErrStaleLease
 	}
 	if err != nil {
@@ -863,7 +874,52 @@ func (s *CommandStore) Acknowledge(
 	if err := tx.Commit(ctx); err != nil {
 		return command.Command{}, fmt.Errorf("commit acknowledgement transaction: %w", err)
 	}
+	metrics.RecordCommandAcknowledged()
+	metrics.ObserveCommandDeliveryDuration(now.Sub(acknowledged.CreatedAt).Seconds())
 	return acknowledged, nil
+}
+
+func (s *CommandStore) RefreshQueueDepth(ctx context.Context) error {
+	if s.pool == nil {
+		return fmt.Errorf("refresh queue depth: database pool is nil")
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT state::text, count(*)
+		FROM orbit.commands
+		WHERE state IN ('QUEUED', 'RETRY_WAIT', 'LEASED', 'IN_FLIGHT')
+		GROUP BY state`)
+	if err != nil {
+		return fmt.Errorf("count queue depth: %w", err)
+	}
+	defer rows.Close()
+
+	seen := map[string]struct{}{
+		"QUEUED":     {},
+		"RETRY_WAIT": {},
+		"LEASED":     {},
+		"IN_FLIGHT":  {},
+	}
+	counts := make(map[string]int, len(seen))
+	for state := range seen {
+		counts[state] = 0
+	}
+	for rows.Next() {
+		var state string
+		var count int
+		if err := rows.Scan(&state, &count); err != nil {
+			return fmt.Errorf("scan queue depth row: %w", err)
+		}
+		counts[state] = count
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate queue depth rows: %w", err)
+	}
+	for state, count := range counts {
+		if err := metrics.SetQueueDepth(state, count); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func getByIdempotencyKey(

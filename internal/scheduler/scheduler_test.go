@@ -40,6 +40,11 @@ func (s *fakeStore) LeaseNext(_ context.Context, request command.LeaseRequest, c
 	return s.leases, s.leaseErr
 }
 
+func (s *fakeStore) RefreshQueueDepth(context.Context) error {
+	s.calls = append(s.calls, "queue-depth")
+	return nil
+}
+
 type fakeDispatcher struct {
 	dispatched []command.Lease
 	failAt     int
@@ -96,7 +101,7 @@ func TestRunOnceExpiresCommandsBeforeLeasing(t *testing.T) {
 	if _, err := scheduler.RunOnce(context.Background()); err != nil {
 		t.Fatalf("RunOnce() error = %v", err)
 	}
-	want := []string{"sweep-leases", "sweep-commands", "lease"}
+	want := []string{"sweep-leases", "sweep-commands", "lease", "queue-depth"}
 	if len(store.calls) != len(want) {
 		t.Fatalf("calls = %v", store.calls)
 	}

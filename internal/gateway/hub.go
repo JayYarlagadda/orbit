@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	orbitv1 "github.com/JayYarlagadda/orbit/gen/orbit/v1"
+	"github.com/JayYarlagadda/orbit/internal/metrics"
 	"github.com/JayYarlagadda/orbit/internal/session"
 )
 
@@ -98,6 +99,7 @@ func (h *Hub) Rebind() {
 	h.done = make(chan struct{})
 	h.failed = false
 	h.mu.Unlock()
+	metrics.SetGatewayDeviceSessions(0)
 
 	for {
 		select {
@@ -193,6 +195,7 @@ func (h *Hub) Register(
 				}
 			}
 			registered = true
+			h.refreshDeviceSessions()
 			return connection, nil
 		}
 	}
@@ -277,6 +280,18 @@ func (h *Hub) remove(connectionID string, expected *Connection) {
 	if h.connections[connectionID] == expected {
 		delete(h.connections, connectionID)
 	}
+	h.refreshDeviceSessionsLocked()
+}
+
+func (h *Hub) refreshDeviceSessions() {
+	h.mu.RLock()
+	count := len(h.connections)
+	h.mu.RUnlock()
+	metrics.SetGatewayDeviceSessions(count)
+}
+
+func (h *Hub) refreshDeviceSessionsLocked() {
+	metrics.SetGatewayDeviceSessions(len(h.connections))
 }
 
 func (c *Connection) Frames() <-chan *orbitv1.ControlFrame { return c.frames }

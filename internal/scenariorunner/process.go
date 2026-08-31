@@ -15,8 +15,10 @@ import (
 )
 
 type managedProcess struct {
-	cmd *exec.Cmd
-	env []string
+	cmd    *exec.Cmd
+	env    []string
+	stdout *os.File
+	stderr *os.File
 }
 
 type processGroup struct {
@@ -30,7 +32,7 @@ func (g *processGroup) start(name, binary string, env []string, workDir string) 
 	if g.processes == nil {
 		g.processes = make(map[string]*managedProcess)
 	}
-	if existing, ok := g.processes[name]; ok && existing.cmd.Process != nil && existing.cmd.ProcessState == nil {
+	if existing, ok := g.processes[name]; ok && existing.cmd != nil && existing.cmd.Process != nil && existing.cmd.ProcessState == nil {
 		return fmt.Errorf("process %s is already running", name)
 	}
 	cmd := exec.Command(binary)
@@ -53,7 +55,12 @@ func (g *processGroup) start(name, binary string, env []string, workDir string) 
 		_ = stderr.Close()
 		return err
 	}
-	g.processes[name] = &managedProcess{cmd: cmd, env: append([]string(nil), env...)}
+	g.processes[name] = &managedProcess{
+		cmd:    cmd,
+		env:    append([]string(nil), env...),
+		stdout: stdout,
+		stderr: stderr,
+	}
 	return nil
 }
 
@@ -70,18 +77,35 @@ func (g *processGroup) running(name string) bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	process, ok := g.processes[name]
-	return ok && process.cmd.Process != nil && process.cmd.ProcessState == nil
+	return ok && process.cmd != nil && process.cmd.Process != nil && process.cmd.ProcessState == nil
 }
 
 func (g *processGroup) stop(name string) {
 	g.mu.Lock()
 	process, ok := g.processes[name]
 	g.mu.Unlock()
-	if !ok || process.cmd.Process == nil {
+	if !ok || process.cmd == nil || process.cmd.Process == nil {
 		return
 	}
+	if process.stdout != nil {
+		_ = process.stdout.Close()
+		process.stdout = nil
+	}
+	if process.stderr != nil {
+		_ = process.stderr.Close()
+		process.stderr = nil
+	}
 	_ = process.cmd.Process.Kill()
-	_, _ = process.cmd.Process.Wait()
+	waitDone := make(chan struct{})
+	go func() {
+		_ = process.cmd.Wait()
+		close(waitDone)
+	}()
+	select {
+	case <-waitDone:
+	case <-time.After(5 * time.Second):
+	}
+	process.cmd = nil
 }
 
 func (g *processGroup) stopAll() {

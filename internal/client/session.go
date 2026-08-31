@@ -9,7 +9,9 @@ import (
 
 	orbitv1 "github.com/JayYarlagadda/orbit/gen/orbit/v1"
 	"github.com/JayYarlagadda/orbit/internal/heartbeat"
+	"github.com/JayYarlagadda/orbit/internal/metrics"
 	"github.com/JayYarlagadda/orbit/internal/session"
+	"github.com/JayYarlagadda/orbit/internal/telemetry"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -31,6 +33,13 @@ func RunSession(
 	state *StateStore,
 	handler Handler,
 ) error {
+	ctx, span := telemetry.Start(ctx, "orbit.client.session", telemetry.DeviceID(config.DeviceID))
+	var runErr error
+	defer func() {
+		metrics.SetClientSessionActive(false)
+		telemetry.End(span, runErr)
+	}()
+
 	deviceID, err := session.NormalizeIdentifier("device_id", config.DeviceID)
 	if err != nil {
 		return err
@@ -62,8 +71,10 @@ func RunSession(
 		return errors.New("gateway returned an invalid device session")
 	}
 	if err := state.ObserveSession(opened.SessionEpoch); err != nil {
-		return fmt.Errorf("persist device session: %w", err)
+		runErr = fmt.Errorf("persist device session: %w", err)
+		return runErr
 	}
+	metrics.SetClientSessionActive(true)
 
 	settings := config.Heartbeat
 	if settings.Interval == 0 {

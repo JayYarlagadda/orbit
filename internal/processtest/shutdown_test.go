@@ -19,12 +19,12 @@ func TestGatewayGracefulShutdown(t *testing.T) {
 	binary := gatewayBinary
 
 	cmd := exec.Command(binary)
-	cmd.Env = append(os.Environ(),
+	cmd.Env = withTelemetryOff(append(os.Environ(),
 		"ORBIT_GATEWAY_ID=gateway-shutdown",
 		"ORBIT_CONTROL_ADDRESS="+controlAddress,
 		"ORBIT_GATEWAY_LISTEN_ADDRESS="+listenAddress,
 		"ORBIT_GATEWAY_SHUTDOWN_TIMEOUT=2s",
-	)
+	))
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	prepareInterruptible(cmd)
@@ -48,13 +48,13 @@ func TestClientGracefulShutdown(t *testing.T) {
 	statePath := filepath.Join(t.TempDir(), "state.json")
 
 	cmd := exec.Command(binary)
-	cmd.Env = append(os.Environ(),
+	cmd.Env = withTelemetryOff(append(os.Environ(),
 		"ORBIT_DEVICE_ID=edge-shutdown",
 		"ORBIT_CLIENT_GATEWAY_ADDRESS="+gatewayAddress,
 		"ORBIT_CLIENT_STATE_PATH="+statePath,
 		"ORBIT_CLIENT_RECONNECT_INITIAL_DELAY=50ms",
 		"ORBIT_CLIENT_RECONNECT_MAX_DELAY=200ms",
-	)
+	))
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	prepareInterruptible(cmd)

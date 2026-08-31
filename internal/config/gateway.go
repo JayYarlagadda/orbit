@@ -10,10 +10,13 @@ import (
 	"github.com/JayYarlagadda/orbit/internal/session"
 )
 
+const defaultGatewayMetricsAddress = "127.0.0.1:9092"
+
 type Gateway struct {
 	GatewayID             string
 	ControlAddress        string
 	ListenAddress         string
+	MetricsAddress        string
 	ShutdownTimeout       time.Duration
 	ControlBuffer         int
 	ConnectionBuffer      int
@@ -31,6 +34,7 @@ func LoadGateway(lookup LookupEnv) (Gateway, error) {
 	result := Gateway{
 		ControlAddress:        "127.0.0.1:50051",
 		ListenAddress:         "127.0.0.1:50052",
+		MetricsAddress:        defaultGatewayMetricsAddress,
 		ShutdownTimeout:       10 * time.Second,
 		ControlBuffer:         256,
 		ConnectionBuffer:      16,
@@ -60,6 +64,9 @@ func LoadGateway(lookup LookupEnv) (Gateway, error) {
 			}
 			*target = value
 		}
+	}
+	if value, ok := lookup("ORBIT_METRICS_ADDRESS"); ok {
+		result.MetricsAddress = strings.TrimSpace(value)
 	}
 	if value, ok := lookup("ORBIT_GATEWAY_SHUTDOWN_TIMEOUT"); ok {
 		parsed, err := time.ParseDuration(strings.TrimSpace(value))

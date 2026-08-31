@@ -1,4 +1,4 @@
-.PHONY: generate fmt check-fmt vet test test-race build-go configure-cpp build-cpp test-cpp verify
+.PHONY: generate fmt check-fmt vet test test-race build-go configure-cpp build-cpp test-cpp verify verify-release benchmark-check
 
 generate:
 	powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/generate.ps1
@@ -31,4 +31,10 @@ build-cpp: configure-cpp
 test-cpp: build-cpp
 	ctest --preset default
 
-verify: check-fmt vet test-race build-go test-cpp
+benchmark-check:
+	go run ./cmd/benchmark-check ./benchmarks/b0-harness-calibration.v1.json
+
+verify: check-fmt vet test-race build-go test-cpp benchmark-check
+
+verify-release: verify
+	@test -f docs/results/b0-harness-calibration/summary.json

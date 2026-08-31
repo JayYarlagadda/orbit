@@ -13,11 +13,11 @@ func TestOrbitdGracefulShutdown(t *testing.T) {
 
 	listenAddress := freeAddress(t)
 	cmd := exec.Command(orbitdBinary)
-	cmd.Env = append(os.Environ(),
+	cmd.Env = withTelemetryOff(append(os.Environ(),
 		"ORBIT_DATABASE_URL="+databaseURL,
 		"ORBIT_LISTEN_ADDRESS="+listenAddress,
 		"ORBIT_SHUTDOWN_TIMEOUT=2s",
-	)
+	))
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	prepareInterruptible(cmd)

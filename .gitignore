@@ -22,4 +22,5 @@ Thumbs.db
 # Runtime state and generated results
 /data/
 /docs/results/local/
+/tmp-offline-debug*/
 *.log

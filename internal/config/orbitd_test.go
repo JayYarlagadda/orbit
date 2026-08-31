@@ -48,7 +48,8 @@ func TestLoadOrbitdDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadOrbitd() error = %v", err)
 	}
-	if got.ListenAddress != defaultListenAddress || got.ShutdownTimeout != defaultShutdown || got.DBMaxConnections != defaultMaxConnections {
+	if got.ListenAddress != defaultListenAddress || got.MetricsAddress != defaultMetricsAddress ||
+		got.ShutdownTimeout != defaultShutdown || got.DBMaxConnections != defaultMaxConnections {
 		t.Fatalf("LoadOrbitd() = %+v", got)
 	}
 }

@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JayYarlagadda/orbit/benchmarks/schema/v1/result.schema.json",
+  "title": "Orbit benchmark result summary v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "benchmark_name",
+    "matrix_id",
+    "git_commit",
+    "git_dirty",
+    "go_version",
+    "host",
+    "started_at",
+    "finished_at",
+    "configuration",
+    "trials",
+    "aggregate"
+  ],
+  "properties": {
+    "schema_version": { "const": "1" },
+    "benchmark_name": { "type": "string" },
+    "matrix_id": { "type": "string" },
+    "git_commit": { "type": "string" },
+    "git_dirty": { "type": "boolean" },
+    "go_version": { "type": "string" },
+    "host": { "type": "object" },
+    "started_at": { "type": "string", "format": "date-time" },
+    "finished_at": { "type": "string", "format": "date-time" },
+    "configuration": { "type": "object" },
+    "trials": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/trial" }
+    },
+    "aggregate": { "$ref": "#/$defs/trial_stats" },
+    "bottleneck_notes": { "type": "string" }
+  },
+  "$defs": {
+    "trial": {
+      "type": "object",
+      "required": [
+        "trial",
+        "commands_submitted",
+        "commands_acknowledged",
+        "duration_seconds",
+        "throughput_ack_per_second",
+        "latency_seconds"
+      ],
+      "properties": {
+        "trial": { "type": "integer" },
+        "commands_submitted": { "type": "integer" },
+        "commands_acknowledged": { "type": "integer" },
+        "admission_rejected": { "type": "integer" },
+        "duration_seconds": { "type": "number" },
+        "throughput_ack_per_second": { "type": "number" },
+        "latency_seconds": { "$ref": "#/$defs/latency" }
+      }
+    },
+    "trial_stats": {
+      "type": "object",
+      "required": ["throughput_ack_per_second", "latency_seconds"],
+      "properties": {
+        "throughput_ack_per_second": { "$ref": "#/$defs/stats" },
+        "latency_seconds": { "$ref": "#/$defs/latency_stats" }
+      }
+    },
+    "latency": {
+      "type": "object",
+      "required": ["p50", "p95", "p99", "max"],
+      "properties": {
+        "p50": { "type": "number" },
+        "p95": { "type": "number" },
+        "p99": { "type": "number" },
+        "max": { "type": "number" }
+      }
+    },
+    "stats": {
+      "type": "object",
+      "required": ["median", "min", "max"],
+      "properties": {
+        "median": { "type": "number" },
+        "min": { "type": "number" },
+        "max": { "type": "number" }
+      }
+    },
+    "latency_stats": {
+      "type": "object",
+      "required": ["p50", "p95", "p99"],
+      "properties": {
+        "p50": { "$ref": "#/$defs/stats" },
+        "p95": { "$ref": "#/$defs/stats" },
+        "p99": { "$ref": "#/$defs/stats" }
+      }
+    }
+  }
+}

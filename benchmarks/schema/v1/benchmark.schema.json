@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JayYarlagadda/orbit/benchmarks/schema/v1/benchmark.schema.json",
+  "title": "Orbit benchmark configuration v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "name",
+    "matrix_id",
+    "clients",
+    "commands",
+    "payload_bytes",
+    "warmup_commands",
+    "trials",
+    "submit_concurrency",
+    "control_address",
+    "gateway_address",
+    "producer_id"
+  ],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schema_version": { "const": "1" },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "pattern": ".*\\S.*"
+    },
+    "matrix_id": {
+      "type": "string",
+      "enum": ["B0", "B1", "B2", "B3", "B4", "B5", "B6"]
+    },
+    "clients": { "type": "integer", "minimum": 1, "maximum": 10000 },
+    "commands": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+    "payload_bytes": { "type": "integer", "minimum": 1, "maximum": 65536 },
+    "warmup_commands": { "type": "integer", "minimum": 0, "maximum": 100000 },
+    "trials": { "type": "integer", "minimum": 1, "maximum": 20 },
+    "submit_concurrency": { "type": "integer", "minimum": 1, "maximum": 256 },
+    "priority": { "type": "integer", "minimum": 0, "maximum": 9 },
+    "expires_after_seconds": { "type": "integer", "minimum": 60, "maximum": 86400 },
+    "control_address": { "type": "string", "minLength": 1 },
+    "gateway_address": { "type": "string", "minLength": 1 },
+    "producer_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "gateway_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "poll_interval_ms": { "type": "integer", "minimum": 1, "maximum": 5000 },
+    "trial_timeout_seconds": { "type": "integer", "minimum": 10, "maximum": 3600 }
+  }
+}

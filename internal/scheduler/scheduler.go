@@ -9,12 +9,14 @@ import (
 	"time"
 
 	"github.com/JayYarlagadda/orbit/internal/command"
+	"github.com/JayYarlagadda/orbit/internal/telemetry"
 )
 
 type Store interface {
 	SweepExpiredLeases(context.Context, int, string) (int, error)
 	SweepExpiredCommands(context.Context, int, string) (int, error)
 	LeaseNext(context.Context, command.LeaseRequest, string) ([]command.Lease, error)
+	RefreshQueueDepth(context.Context) error
 }
 
 type Dispatcher interface {
@@ -111,7 +113,12 @@ func (s *Scheduler) Run(ctx context.Context, onError ErrorHandler) {
 }
 
 func (s *Scheduler) RunOnce(ctx context.Context) (CycleResult, error) {
+	ctx, span := telemetry.Start(ctx, "orbit.scheduler.cycle", telemetry.GatewayID(s.config.GatewayID))
+	var runErr error
+	defer func() { telemetry.End(span, runErr) }()
+
 	if err := ctx.Err(); err != nil {
+		runErr = err
 		return CycleResult{}, err
 	}
 	sweepCorrelation, err := s.newCorrelation()
@@ -149,11 +156,15 @@ func (s *Scheduler) RunOnce(ctx context.Context) (CycleResult, error) {
 	}
 	result := CycleResult{ExpiredLeases: swept, ExpiredCommands: expired, Leased: len(leases)}
 	for _, lease := range leases {
-		if err := s.dispatcher.Dispatch(ctx, lease); err != nil {
+		leaseCtx, leaseSpan := telemetry.Start(ctx, "orbit.command.lease", telemetry.CommandID(lease.Command.ID))
+		if err := s.dispatcher.Dispatch(leaseCtx, lease); err != nil {
+			telemetry.End(leaseSpan, err)
 			return result, fmt.Errorf("dispatch command %s: %w", lease.Command.ID, err)
 		}
+		telemetry.End(leaseSpan, nil)
 		result.Dispatched++
 	}
+	_ = s.store.RefreshQueueDepth(ctx)
 	return result, nil
 }
 
