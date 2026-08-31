@@ -1,0 +1,19 @@
+mainmenu "Orbit E1 application"
+
+config ORBIT_ACQ_QUEUE_DEPTH
+	int "Acquisition queue depth"
+	default 64
+	help
+	  Bounded static queue for IMU samples. Drops are counted when full.
+
+config ORBIT_IMU_LOG_LEVEL
+	int "IMU driver log level"
+	default 3
+
+config ORBIT_E1_POLL_DURATION_SEC
+	int "Polling baseline duration (seconds)"
+	default 5
+
+config ORBIT_E1_ISR_DURATION_SEC
+	int "ISR acquisition duration (seconds)"
+	default 10

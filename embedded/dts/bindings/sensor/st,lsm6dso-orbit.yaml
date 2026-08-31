@@ -1,0 +1,11 @@
+description: Orbit register-level LSM6DSO SPI IMU
+
+compatible: "st,lsm6dso-orbit"
+
+include: spi-device.yaml
+
+properties:
+  int-gpios:
+    type: phandle-array
+    required: true
+    description: Data-ready interrupt line (INT1, active high)

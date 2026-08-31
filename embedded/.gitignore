@@ -1,0 +1,14 @@
+# West workspace (fetched by west update)
+/.west/
+/zephyr/
+/modules/
+/bootloader/
+/tools/
+
+# Build outputs
+/build/
+**/build/
+
+# Editor / OS
+.DS_Store
+Thumbs.db
