@@ -15,6 +15,8 @@ In-process device sessions against a live `orbitd` + gateway. Use
 
 Published B0 results: [`docs/results/b0-harness-calibration/`](../docs/results/b0-harness-calibration/).
 
+Published B1 smoke results: [`docs/results/b1-healthy-baseline/`](../docs/results/b1-healthy-baseline/) (23 ack/s median on reference host).
+
 ## Scenario benchmarks (`scenario-run`)
 
 Fault and recovery matrices exercise real processes through the scenario runner.
