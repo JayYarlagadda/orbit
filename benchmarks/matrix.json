@@ -1,0 +1,47 @@
+{
+  "schema_version": "1",
+  "description": "Maps verification matrix IDs to runnable artifacts.",
+  "entries": [
+    {
+      "matrix_id": "B0",
+      "runner": "harness",
+      "config": "benchmarks/b0-harness-calibration.v1.json",
+      "smoke_config": "benchmarks/b0-harness-calibration-smoke.v1.json"
+    },
+    {
+      "matrix_id": "B1",
+      "runner": "harness",
+      "config": "benchmarks/b1-healthy-baseline.v1.json",
+      "smoke_config": "benchmarks/b1-healthy-baseline-smoke.v1.json"
+    },
+    {
+      "matrix_id": "B2",
+      "runner": "scenario",
+      "scenario": "scenarios/examples/offline-reconnect.v1.json",
+      "description": "Logical RTT, loss, and jitter via compiled schedule"
+    },
+    {
+      "matrix_id": "B3",
+      "runner": "scenario",
+      "scenario": "scenarios/examples/dual-gateway-session.v1.json",
+      "description": "Gateway crash under steady load"
+    },
+    {
+      "matrix_id": "B4",
+      "runner": "scenario",
+      "scenario": "scenarios/examples/offline-reconnect.v1.json",
+      "description": "Mass device disconnect; extend schedule for producer rate"
+    },
+    {
+      "matrix_id": "B5",
+      "runner": "integration",
+      "description": "Admission limits — see internal/storage/postgres admission tests"
+    },
+    {
+      "matrix_id": "B6",
+      "runner": "scenario",
+      "scenario": "scenarios/examples/dual-gateway-session.v1.json",
+      "description": "Client reconnect churn across gateways"
+    }
+  ]
+}

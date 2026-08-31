@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orbit-config
+  namespace: orbit
+data:
+  ORBIT_DATABASE_URL: postgres://orbit:orbit-local-only@postgres:5432/orbit?sslmode=disable
+  ORBIT_OTEL_ENABLED: "false"
+  ORBIT_GATEWAY_ID: gateway-a
+  ORBIT_CONTROL_ADDRESS: orbitd:50051
+  POSTGRES_DB: orbit
+  POSTGRES_USER: orbit
+  POSTGRES_PASSWORD: orbit-local-only

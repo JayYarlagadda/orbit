@@ -1,0 +1,20 @@
+{
+  "$schema": "./schema/v1/benchmark.schema.json",
+  "schema_version": "1",
+  "name": "b1-healthy-baseline-smoke",
+  "matrix_id": "B1",
+  "clients": 20,
+  "commands": 500,
+  "payload_bytes": 256,
+  "warmup_commands": 50,
+  "trials": 3,
+  "submit_concurrency": 16,
+  "priority": 4,
+  "expires_after_seconds": 3600,
+  "control_address": "127.0.0.1:50051",
+  "gateway_address": "127.0.0.1:50052",
+  "producer_id": "bench-producer",
+  "gateway_id": "gateway-bench",
+  "poll_interval_ms": 25,
+  "trial_timeout_seconds": 300
+}

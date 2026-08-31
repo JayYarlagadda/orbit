@@ -48,6 +48,10 @@ services, and a history checker verifies the documented guarantees.
   references.
 - [Operations guide](docs/operations.md): triage failures from metrics, traces,
   and scenario history.
+- [Benchmark matrix](benchmarks/README.md): B0–B6 configs and scenario bindings.
+- [Kubernetes (stretch)](deployments/k8s/README.md): minimal single-region manifests.
+- [Netem validation (stretch)](docs/stretch/netem-validation.md): compare logical
+  faults with Linux `tc netem`.
 
 ## Stack
 

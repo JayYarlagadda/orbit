@@ -34,6 +34,9 @@ test-cpp: build-cpp
 benchmark-check:
 	go run ./cmd/benchmark-check ./benchmarks/b0-harness-calibration.v1.json
 
+benchmark-check-all:
+	powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/benchmark-check-all.ps1
+
 verify: check-fmt vet test-race build-go test-cpp benchmark-check
 
 verify-release: verify

@@ -165,9 +165,10 @@ Portfolio reviewers can clone the repository and follow `scripts/demo-release.ps
 
 ## Open work
 
-- Optional: extend benchmark matrix to B1–B6 and publish additional results.
 - Optional stretch: Kubernetes deployment, Linux `tc netem` validation, or a
-  second persistence backend behind the storage contract.
+  second persistence backend behind the storage contract. Scaffolding lives under
+  `deployments/k8s/`, `deployments/docker/`, and `docs/stretch/netem-validation.md`.
+- Extend harness benchmarks B1–B6 with published results (`benchmarks/matrix.json`).
 
 ## Known limitations
 

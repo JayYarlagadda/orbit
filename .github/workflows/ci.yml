@@ -127,7 +127,23 @@ jobs:
             echo "::error::the invalid scenario fixture was accepted" >&2
             exit 1
           fi
-      - name: Verify benchmark config
-        run: go run ./cmd/benchmark-check ./benchmarks/b0-harness-calibration.v1.json
+      - name: Verify benchmark configs
+        run: |
+          for config in benchmarks/*.v1.json; do
+            go run ./cmd/benchmark-check "$config"
+          done
+          matrix='benchmarks/matrix.json'
+          python3 - <<'PY'
+          import json, pathlib, subprocess, sys
+          root = pathlib.Path("benchmarks/matrix.json")
+          data = json.loads(root.read_text())
+          for entry in data["entries"]:
+              if entry.get("runner") == "scenario":
+                  path = entry["scenario"]
+                  if not pathlib.Path(path).is_file():
+                      print(f"missing scenario for {entry['matrix_id']}: {path}", file=sys.stderr)
+                      sys.exit(1)
+                  subprocess.check_call(["go", "run", "./cmd/scenario-check", path])
+          PY
       - name: Check whitespace errors
         run: git diff --check

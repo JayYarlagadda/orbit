@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: orbit
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - postgres.yaml
+  - orbitd.yaml
+  - gateway.yaml
+images:
+  - name: orbit/orbitd
+    newName: orbit/orbitd
+    newTag: local
+  - name: orbit/gateway
+    newName: orbit/gateway
+    newTag: local
+  - name: orbit/orbit-migrate
+    newName: orbit/orbit-migrate
+    newTag: local
