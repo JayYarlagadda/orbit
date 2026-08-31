@@ -5,10 +5,11 @@ edge devices. It is designed to demonstrate distributed-systems correctness,
 failure recovery, deterministic fault replay, and measured performance rather
 than simply assembling a large infrastructure stack.
 
-Status: M0–M7 are complete locally. The durable command API, delivery path,
-failover scenarios, observability stack, B0 benchmark harness, and release
-verification are implemented and verified. See [current status](docs/current-status.md)
-and [release evidence](docs/release.md) for exact claims and artifacts.
+Status: M0–M7 are complete locally (tag **`v1.0-distributed-runtime`**). The
+durable command API, delivery path, failover scenarios, observability stack,
+and benchmark harness are implemented and verified. **Embedded expansion (E1+)**
+is planned — see [embedded expansion plan](docs/embedded-expansion-plan.md).
+See [current status](docs/current-status.md) and [release evidence](docs/release.md).
 
 ## Project thesis
 
@@ -52,6 +53,8 @@ services, and a history checker verifies the documented guarantees.
 - [Kubernetes (stretch)](deployments/k8s/README.md): minimal single-region manifests.
 - [Netem validation (stretch)](docs/stretch/netem-validation.md): compare logical
   faults with Linux `tc netem`.
+- [Embedded expansion plan](docs/embedded-expansion-plan.md): STM32H7 + Zephyr
+  roadmap (E0–E9 milestones).
 
 ## Stack
 

@@ -317,6 +317,30 @@ Milestones are outcome-based rather than date-based:
 7. `M6-observable`: failures are visible and diagnosable.
 8. `M7-release`: invariants and benchmark claims are reproducible.
 
+The distributed runtime is tagged **`v1.0-distributed-runtime`** at the M7
+completion point. Embedded work uses milestones **E0–E9** and must not change
+that tag's tree without an explicit ADR.
+
+## 15. Embedded expansion (E0–E9)
+
+See [embedded-expansion-plan.md](embedded-expansion-plan.md) for the full plan.
+Phases are strictly ordered:
+
+| Phase | Milestone | Outcome |
+|-------|-----------|---------|
+| Freeze | E0 | Tag `v1.0-distributed-runtime`; `embedded/` scaffold |
+| 1 | E1 | Zephyr bring-up; SPI IMU; interrupt acquisition (500 Hz) |
+| 2 | E2 | DMA; bounded static queues; RTOS priorities; jitter metrics |
+| 3 | E3 | Flash circular log; reboot recovery |
+| 4 | E4 | Embedded protocol; Linux edge gateway; gRPC to `orbitd` |
+| 5 | E5 | Disconnect/reconnect; ordered replay; backpressure |
+| 6 | E6 | Watchdog; health supervisor; fault telemetry |
+| 7 | E7 | Python HIL harness and automated scenarios |
+| 8 | E8 | Long-duration stress benchmarks and published results |
+| 9 (optional) | E9 | CAN FD; MCUboot OTA rollback |
+
+Resume-worthy embedded minimum: **E1–E8** complete.
+
 ## 13. Documentation checklist
 
 Keep these current throughout implementation:
@@ -336,7 +360,8 @@ Keep these current throughout implementation:
 - security assumptions and threat boundary;
 - ADRs for consequential decisions;
 - known limitations and future work;
-- interview-oriented claim/evidence summary.
+- interview-oriented claim/evidence summary;
+- embedded expansion plan, architecture, protocol, and failure model (E milestones).
 
 ## 14. Definition of done
 

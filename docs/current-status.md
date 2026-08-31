@@ -19,6 +19,23 @@ this file records what actually exists and what has been verified.
 | M6 observability | Complete locally | Prometheus metrics on orbitd/gateway/client, OTLP traces, Compose Prometheus/Grafana/Jaeger, bounded-label tests, and `docs/operations.md` triage guide |
 | M7 release | Complete locally | B0 benchmark harness, committed `summary.json`, `docs/release.md`, `verify-release` |
 
+### Embedded expansion (future — frozen core at `v1.0-distributed-runtime`)
+
+| Milestone | State | Evidence |
+|---|---|---|
+| E0 core freeze | Complete | Git tag `v1.0-distributed-runtime`; `embedded/` + plan docs; M0–M7 unchanged |
+| E1 bring-up & acquisition | Not started | STM32H743 + Zephyr; custom SPI IMU; 500 Hz ISR path |
+| E2 DMA & RTOS structure | Not started | DMA SPI; bounded static queues; jitter/CPU vs polling |
+| E3 persistent offline buffer | Not started | Flash circular log; reboot recovery |
+| E4 transport & edge gateway | Not started | Embedded protocol; Linux gateway → `orbitd` |
+| E5 reconnect & replay | Not started | Ordered replay; idempotency; backpressure on MCU |
+| E6 watchdog & health | Not started | Supervisor; persisted reboot reason |
+| E7 HIL automation | Not started | Python harness; scripted faults; reports |
+| E8 stress & metrics | Not started | Long-run benchmarks; `docs/results/embedded/` |
+| E9 stretch (optional) | Not started | CAN FD; MCUboot OTA rollback |
+
+Plan: [embedded-expansion-plan.md](embedded-expansion-plan.md).
+
 ## Implemented
 
 - Versioned scenario JSON contract with strict Go validation and valid/invalid
@@ -165,10 +182,12 @@ Portfolio reviewers can clone the repository and follow `scripts/demo-release.ps
 
 ## Open work
 
-- Optional stretch: Kubernetes deployment, Linux `tc netem` validation, or a
-  second persistence backend behind the storage contract. Scaffolding lives under
-  `deployments/k8s/`, `deployments/docker/`, and `docs/stretch/netem-validation.md`.
-- Extend harness benchmarks B1–B6 with published results (`benchmarks/matrix.json`).
+- **Embedded (E1+):** STM32H743 Nucleo + Zephyr per
+  [embedded-expansion-plan.md](embedded-expansion-plan.md). Distributed core frozen
+  at tag `v1.0-distributed-runtime`.
+- Extend harness benchmarks B1 full pin and B2–B6 results (`benchmarks/matrix.json`).
+- Optional stretch: Kubernetes (`deployments/k8s/`), `tc netem`
+  (`docs/stretch/netem-validation.md`).
 
 ## Known limitations
 
