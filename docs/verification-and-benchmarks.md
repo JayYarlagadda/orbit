@@ -59,14 +59,14 @@ evidence remain required.
 | INV-01 | Closed command transition table; ACK terminal-state database update | Corrupted-history checker test |
 | INV-02 | Durable client state applies a retained command ID once across reopen; process tests send a duplicate assignment and a lost-ACK reconnect; scenario runner records client applications | Scenario history checker on corrupted fixtures |
 | INV-03 | PostgreSQL leases only the earliest non-terminal device sequence | Multi-command device process test |
-| INV-04 | Expiry sweep and lease selection integration tests | History checker on post-expiry delivery attempts |
+| INV-04 | Expiry sweep and lease selection integration tests; history checker on post-expiry delivery attempts | — |
 | INV-05 | Stale lease token and stale/mismatched session epoch integration tests | Paused-worker process scenario |
 | INV-06 | Submit plus forced audit-failure rollback integration test | API failure injection scenario |
-| INV-07 | Matching and conflicting idempotency integration tests | Concurrent duplicate producer test |
+| INV-07 | Matching and conflicting idempotency integration tests; history checker on producer/idempotency keys | Concurrent duplicate producer test |
 | INV-08 | Session acquisition increments epochs; stale release/report rejected | Dual-gateway process scenario |
 | INV-09 | Cancellation and ACK advance contiguous terminal cursor | Expiry/dead-letter successor tests |
 | INV-10 | Scheduler, control stream, gateway, and per-device queues have validated bounds; reconnect soak keeps goroutine and heap drift inside documented slack | Process-level memory/connection soak |
-| INV-11 | Submit, cancel, lease, in-flight, retry-wait, and ACK audit writes share transactions | Audit history checker |
+| INV-11 | Submit, cancel, lease, in-flight, retry-wait, and ACK audit writes share transactions; history checker on audit-chain continuity | — |
 
 PostgreSQL integration tests run against the real `postgres:18.6-bookworm`
 image. The local run on 2026-08-28 passed under the Go race detector. Remote CI

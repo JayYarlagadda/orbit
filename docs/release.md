@@ -26,9 +26,12 @@ measured trial window after warmup.
 |-------|--------------|--------------------|-----------------|
 | At-least-once transport | [Delivery semantics](decisions/0002-at-least-once-delivery.md) | `gateway-crash-after-send`, processtest duplicate ACK | scenario `history.json` |
 | Duplicate-safe reference client | Client dedup in [system design](system-design.md) | INV-02 checker tests, processtest | `internal/history/checker_test.go` |
-| Per-device ordering | Sequence eligibility rules | INV-03 integration tests, scheduler tests | PostgreSQL integration suite |
+| Per-device ordering | Sequence eligibility rules | INV-03 checker tests, scheduler tests | PostgreSQL integration suite |
+| No delivery after expiry | TTL and lease selection | INV-04 history checker | — |
 | Lease fencing | Token-conditional transitions | Stale lease integration tests (INV-05) | `commands_integration_test.go` |
+| Idempotency keys | Producer request hashing | INV-07 history checker, idempotency integration tests | — |
 | Gateway recovery | Session epoch design | `dual-gateway-session`, gateway-crash scenarios | scenario runner + history checker |
+| Audit continuity | Transactional state writes | INV-11 history checker | — |
 | Bounded overload | Admission catalog | Admission integration tests | `commands_integration_test.go` |
 | Failures are diagnosable | Observability contract §11 | Metrics label tests, M6 dashboards | [`operations.md`](operations.md) |
 | Measured throughput | [Benchmark method](verification-and-benchmarks.md) §7–9 | `orbit-bench` harness, `benchmark-check` | B0 `summary.json` |

@@ -5,10 +5,10 @@ edge devices. It is designed to demonstrate distributed-systems correctness,
 failure recovery, deterministic fault replay, and measured performance rather
 than simply assembling a large infrastructure stack.
 
-Status: M0–M6 are complete locally. The durable command API, delivery path,
-failover scenarios, observability stack, and B0 benchmark harness are implemented
-and verified. See [current status](docs/current-status.md) and
-[release evidence](docs/release.md) for exact claims and artifacts.
+Status: M0–M7 are complete locally. The durable command API, delivery path,
+failover scenarios, observability stack, B0 benchmark harness, and release
+verification are implemented and verified. See [current status](docs/current-status.md)
+and [release evidence](docs/release.md) for exact claims and artifacts.
 
 ## Project thesis
 

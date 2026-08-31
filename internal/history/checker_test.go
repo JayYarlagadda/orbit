@@ -84,4 +84,30 @@ func TestCheckerDetectsCorruptedHistories(t *testing.T) {
 	if report := Check(expired); report.Passed || report.Violations[0].Invariant != InvNoDeliveryAfterExpiry {
 		t.Fatalf("expected INV-04 violation, got %+v", report)
 	}
+
+	duplicateKey := passing
+	duplicateKey.Commands = append(duplicateKey.Commands, CommandSnapshot{
+		ID:             "cmd-2",
+		DeviceID:       "device-a",
+		ProducerID:     "producer-a",
+		IdempotencyKey: "request-1",
+		RequestHash:    "deadbeef",
+		SequenceNumber: 2,
+		State:          "QUEUED",
+	})
+	duplicateKey.Commands[0].ProducerID = "producer-a"
+	duplicateKey.Commands[0].IdempotencyKey = "request-1"
+	duplicateKey.Commands[0].RequestHash = "cafebabe"
+	if report := Check(duplicateKey); report.Passed || report.Violations[0].Invariant != InvIdempotencyConsistency {
+		t.Fatalf("expected INV-07 violation, got %+v", report)
+	}
+
+	brokenAudit := passing
+	brokenAudit.AuditEvents = []AuditEvent{
+		{CommandID: "cmd-1", NewState: "QUEUED"},
+		{CommandID: "cmd-1", OldState: "LEASED", NewState: "ACKNOWLEDGED"},
+	}
+	if report := Check(brokenAudit); report.Passed || report.Violations[0].Invariant != InvAuditableTransitions {
+		t.Fatalf("expected INV-11 violation, got %+v", report)
+	}
 }

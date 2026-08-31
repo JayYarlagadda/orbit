@@ -72,6 +72,9 @@ this file records what actually exists and what has been verified.
   **Orbit overview** dashboard), and Jaeger OTLP collector.
 - Operations guide (`docs/operations.md`) for triaging failures from metrics,
   traces, and `history.json`.
+- History checker invariants INV-01–INV-05, INV-07–INV-09, and INV-11 on
+  collected scenario histories (INV-04 post-expiry delivery, INV-07 idempotency
+  keys, INV-11 audit-chain continuity).
 
 ## Verified locally
 
@@ -154,13 +157,17 @@ M7 release evidence is closed locally: the B0 harness is pinned, results are
 committed under `docs/results/`, and `scripts/verify-release.ps1` validates the
 artifact contract.
 
+Post-release polish extended the history checker with INV-04, INV-07, and
+INV-11. INV-06 (submit truthfulness) and INV-10 (bounded memory) remain
+integration/process-test evidence; INV-12 is covered by telemetry redaction tests.
+
 Portfolio reviewers can clone the repository and follow `scripts/demo-release.ps1`.
 
 ## Open work
 
 - Optional: extend benchmark matrix to B1–B6 and publish additional results.
-- Extend checker coverage for remaining invariants (INV-06, INV-07, INV-10–INV-12).
-  INV-04 (no delivery after expiry) is now checked from `delivery_attempts`.
+- Optional stretch: Kubernetes deployment, Linux `tc netem` validation, or a
+  second persistence backend behind the storage contract.
 
 ## Known limitations
 

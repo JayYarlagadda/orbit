@@ -2,8 +2,8 @@
   "schema_version": "1",
   "benchmark_name": "b0-harness-calibration",
   "matrix_id": "B0",
-  "git_commit": "77d59092e4c10fb2b37da94ea84903c331bc982f",
-  "git_dirty": true,
+  "git_commit": "7666a795f196c8cdafc3896636e60bfeeb286a01",
+  "git_dirty": false,
   "go_version": "go1.26.7",
   "host": {
     "os": "windows",

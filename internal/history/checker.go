@@ -7,13 +7,15 @@ import (
 )
 
 const (
-	InvAcknowledgedTerminal = "INV-01"
-	InvOneApplication       = "INV-02"
-	InvDeviceOrder          = "INV-03"
-	InvNoDeliveryAfterExpiry = "INV-04"
-	InvFencingMonotonicity  = "INV-05"
-	InvSingleActiveSession  = "INV-08"
-	InvTerminalUnblocks     = "INV-09"
+	InvAcknowledgedTerminal   = "INV-01"
+	InvOneApplication         = "INV-02"
+	InvDeviceOrder            = "INV-03"
+	InvNoDeliveryAfterExpiry  = "INV-04"
+	InvFencingMonotonicity    = "INV-05"
+	InvIdempotencyConsistency = "INV-07"
+	InvSingleActiveSession    = "INV-08"
+	InvTerminalUnblocks       = "INV-09"
+	InvAuditableTransitions   = "INV-11"
 )
 
 type Violation struct {
@@ -34,8 +36,10 @@ func Check(record Record) Report {
 	violations = append(violations, checkDeviceOrder(record)...)
 	violations = append(violations, checkNoDeliveryAfterExpiry(record)...)
 	violations = append(violations, checkFencingMonotonicity(record)...)
+	violations = append(violations, checkIdempotencyConsistency(record)...)
 	violations = append(violations, checkSingleActiveSession(record)...)
 	violations = append(violations, checkTerminalUnblocks(record)...)
+	violations = append(violations, checkAuditableTransitions(record)...)
 	return Report{
 		Passed:     len(violations) == 0,
 		Violations: violations,
@@ -131,6 +135,105 @@ func checkNoDeliveryAfterExpiry(record Record) []Violation {
 					deadline.UTC().Format(time.RFC3339Nano),
 				),
 				Position: index,
+			}}
+		}
+	}
+	return nil
+}
+
+func checkIdempotencyConsistency(record Record) []Violation {
+	type idempotencyKey struct {
+		producer string
+		key      string
+	}
+	seen := make(map[idempotencyKey]CommandSnapshot)
+	for _, command := range record.Commands {
+		if command.ProducerID == "" || command.IdempotencyKey == "" {
+			continue
+		}
+		lookup := idempotencyKey{producer: command.ProducerID, key: command.IdempotencyKey}
+		if prior, ok := seen[lookup]; ok {
+			if prior.ID != command.ID || prior.RequestHash != command.RequestHash {
+				return []Violation{{
+					Invariant: InvIdempotencyConsistency,
+					Message: fmt.Sprintf(
+						"producer %q idempotency key %q maps to conflicting commands %s and %s",
+						command.ProducerID,
+						command.IdempotencyKey,
+						prior.ID,
+						command.ID,
+					),
+				}}
+			}
+			continue
+		}
+		seen[lookup] = command
+	}
+	return nil
+}
+
+func checkAuditableTransitions(record Record) []Violation {
+	byCommand := make(map[string][]AuditEvent)
+	for _, event := range record.AuditEvents {
+		byCommand[event.CommandID] = append(byCommand[event.CommandID], event)
+	}
+	finalState := make(map[string]string, len(record.Commands))
+	for _, command := range record.Commands {
+		finalState[command.ID] = command.State
+		if len(byCommand[command.ID]) == 0 {
+			return []Violation{{
+				Invariant: InvAuditableTransitions,
+				Message:   fmt.Sprintf("command %s has no audit events", command.ID),
+			}}
+		}
+	}
+	for commandID, events := range byCommand {
+		sort.Slice(events, func(i, j int) bool {
+			return events[i].OccurredAt.Before(events[j].OccurredAt)
+		})
+		for index, event := range events {
+			if index == 0 {
+				if event.OldState != "" {
+					return []Violation{{
+						Invariant: InvAuditableTransitions,
+						Message: fmt.Sprintf(
+							"command %s first audit event has old_state %q",
+							commandID,
+							event.OldState,
+						),
+						Position: index,
+					}}
+				}
+				continue
+			}
+			if event.OldState != events[index-1].NewState {
+				return []Violation{{
+					Invariant: InvAuditableTransitions,
+					Message: fmt.Sprintf(
+						"command %s audit chain breaks at %s -> %s after %s",
+						commandID,
+						event.OldState,
+						event.NewState,
+						events[index-1].NewState,
+					),
+					Position: index,
+				}}
+			}
+		}
+		want, ok := finalState[commandID]
+		if !ok {
+			continue
+		}
+		last := events[len(events)-1].NewState
+		if want != last {
+			return []Violation{{
+				Invariant: InvAuditableTransitions,
+				Message: fmt.Sprintf(
+					"command %s durable state is %s but last audit event is %s",
+					commandID,
+					want,
+					last,
+				),
 			}}
 		}
 	}

@@ -35,6 +35,9 @@ type AuditEvent struct {
 type CommandSnapshot struct {
 	ID             string    `json:"command_id"`
 	DeviceID       string    `json:"device_id"`
+	ProducerID     string    `json:"producer_id,omitempty"`
+	IdempotencyKey string    `json:"idempotency_key,omitempty"`
+	RequestHash    string    `json:"request_hash,omitempty"`
 	SequenceNumber int64     `json:"sequence_number"`
 	State          string    `json:"state"`
 	AttemptCount   int32     `json:"attempt_count"`
@@ -101,7 +104,8 @@ func Collect(ctx context.Context, pool *pgxpool.Pool, base Record) (Record, erro
 	}
 
 	commandRows, err := pool.Query(ctx, `
-		SELECT id::text, device_id, sequence_number, state::text,
+		SELECT id::text, device_id, producer_id, idempotency_key,
+		       encode(request_hash, 'hex'), sequence_number, state::text,
 		       attempt_count, lease_token, expires_at
 		FROM orbit.commands
 		ORDER BY device_id, sequence_number`)
@@ -114,6 +118,9 @@ func Collect(ctx context.Context, pool *pgxpool.Pool, base Record) (Record, erro
 		if err := commandRows.Scan(
 			&item.ID,
 			&item.DeviceID,
+			&item.ProducerID,
+			&item.IdempotencyKey,
+			&item.RequestHash,
 			&item.SequenceNumber,
 			&item.State,
 			&item.AttemptCount,
