@@ -1,0 +1,28 @@
+/*
+ * Nucleo-H743ZI + LSM6DSO on Arduino SPI header.
+ *
+ * Wiring (Arduino connector):
+ *   SCK  D13  PA5
+ *   MISO D12  PA6
+ *   MOSI D11  PA7
+ *   CS   D10  PD14
+ *   INT1 D3   PB0  (data-ready, active high)
+ */
+
+/ {
+	chosen {
+		orbit,imu = &imu0;
+	};
+};
+
+&arduino_spi {
+	status = "okay";
+	cs-gpios = <&gpiod 14 GPIO_ACTIVE_LOW>;
+
+	imu0: imu@0 {
+		compatible = "st,lsm6dso-orbit";
+		reg = <0>;
+		spi-max-frequency = <10000000>;
+		int-gpios = <&gpiob 0 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
+	};
+};

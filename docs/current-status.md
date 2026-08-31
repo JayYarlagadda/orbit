@@ -1,6 +1,6 @@
 # Current Status
 
-Last reconciled: 2026-08-30.
+Last reconciled: 2026-08-31.
 
 This document is the implementation handoff ledger. The project brief describes
 why Orbit is worth building, the system design describes intended behavior, and
@@ -24,7 +24,7 @@ this file records what actually exists and what has been verified.
 | Milestone | State | Evidence |
 |---|---|---|
 | E0 core freeze | Complete | Git tag `v1.0-distributed-runtime`; `embedded/` + plan docs; M0–M7 unchanged |
-| E1 bring-up & acquisition | Not started | STM32H743 + Zephyr; custom SPI IMU; 500 Hz ISR path |
+| E1 bring-up & acquisition | In progress | Zephyr west workspace, LSM6DSO SPI driver, E1 app scaffold on `feature/embedded-endpoint` |
 | E2 DMA & RTOS structure | Not started | DMA SPI; bounded static queues; jitter/CPU vs polling |
 | E3 persistent offline buffer | Not started | Flash circular log; reboot recovery |
 | E4 transport & edge gateway | Not started | Embedded protocol; Linux gateway → `orbitd` |
@@ -182,7 +182,10 @@ Portfolio reviewers can clone the repository and follow `scripts/demo-release.ps
 
 ## Open work
 
-- **Embedded (E1+):** STM32H743 Nucleo + Zephyr per
+- **Embedded E1:** West workspace + LSM6DSO driver + E1 app on
+  `feature/embedded-endpoint` — flash on Nucleo-H743ZI and record
+  `benchmarks/realtime/` metrics. See [embedded/README.md](../embedded/README.md).
+- **Embedded (E2+):** DMA path, flash buffer, transport per
   [embedded-expansion-plan.md](embedded-expansion-plan.md). Distributed core frozen
   at tag `v1.0-distributed-runtime`.
 - Extend harness benchmarks B1 full pin and B2–B6 results (`benchmarks/matrix.json`).
@@ -211,3 +214,5 @@ Portfolio reviewers can clone the repository and follow `scripts/demo-release.ps
    with `ORBIT_DATABASE_URL` set to execute a closed-loop scenario.
 6. Start `deployments/compose` (Prometheus, Grafana, Jaeger) and follow
    `docs/operations.md` to validate metrics and traces during a scenario run.
+7. For embedded E1: `./scripts/bootstrap-embedded.ps1` then
+   `./scripts/build-embedded-e1.ps1 -Flash` (requires Zephyr SDK + west).
